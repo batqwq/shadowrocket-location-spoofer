@@ -22,9 +22,9 @@ the ARPC/protobuf patching logic in JavaScript.
 3. Import this URL in Shadowrocket:
    `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule`
    For diagnostics, import the request-only module instead:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-req-only2`
+   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-binary-request1`
    To inspect the raw response fields exposed by Shadowrocket, import:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-response-probe.sgmodule?v=20260619-probe2`
+   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-response-probe.sgmodule?v=20260619-binary-probe1`
 4. Install and fully trust Shadowrocket's MITM certificate in iOS Settings.
 5. Enable the module, start Shadowrocket, then toggle iOS Location Services off
    and on before testing Maps.
@@ -62,10 +62,13 @@ Request synthesis remains available in
 `Location spoofer request mode body length: 0`, your Shadowrocket build is not
 exposing the `/clls/wloc` request body to scripts.
 
-If the response-only module logs `Location spoofer response body too short: 0
-bytes`, Shadowrocket is also not exposing the Apple response body. In that case a
-pure Shadowrocket module cannot complete the original MITM technique on that
-build; use the original PacketTunnel/local proxy approach instead.
+The response modules use `binary-body-mode=1` because `/clls/wloc` is a binary
+protobuf response. If the response-only module still logs `Location spoofer
+response body too short: 0 bytes` while the probe reports a non-zero
+`content-length`, Shadowrocket is not exposing that binary Apple response body to
+scripts on that build. In that case a pure Shadowrocket module cannot complete
+the original MITM technique on that build; use the original PacketTunnel/local
+proxy approach instead.
 
 The response probe module logs which `$response` fields Shadowrocket exposes
 (`body`, `bodyBytes`, `rawBody`, and `binaryBody`) so this can be confirmed from

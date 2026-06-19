@@ -886,12 +886,11 @@
     if (info && info.debug) {
       headers["X-Location-Spoofer-Wifi-Count"] = String(info.wifiCount);
     }
-    var body = bytesToBinaryString(bytes);
     $done({
       response: {
-        status: "HTTP/1.1 200 OK",
+        status: 200,
         headers: headers,
-        body: body
+        body: bytes
       }
     });
   }
@@ -904,7 +903,7 @@
     }
     $done({
       headers: headers,
-      body: bytesToBinaryString(bytes)
+      body: bytes
     });
   }
 
