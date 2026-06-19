@@ -325,8 +325,58 @@
     return fields;
   }
 
+  function firstFieldByNumber(fields, fieldNumber) {
+    for (var i = 0; i < fields.length; i += 1) {
+      if (fields[i].fieldNumber === fieldNumber) {
+        return fields[i];
+      }
+    }
+    return null;
+  }
+
+  function signedVarintFieldValue(field) {
+    if (!field || field.wireType !== 0) {
+      return null;
+    }
+    return BigInt.asIntN(64, decodeVarint(field.valueBytes, 0).value);
+  }
+
+  function locationSummary(locationPayload) {
+    try {
+      var fields = parseFields(locationPayload);
+      var lat = signedVarintFieldValue(firstFieldByNumber(fields, 1));
+      var lon = signedVarintFieldValue(firstFieldByNumber(fields, 2));
+      if (lat == null || lon == null) {
+        return "<missing>";
+      }
+      return (Number(lat) / 100000000).toFixed(8) + "," + (Number(lon) / 100000000).toFixed(8);
+    } catch (err) {
+      return "<parse-failed:" + err.message + ">";
+    }
+  }
+
+  function patchedPayloadSummary(payload) {
+    try {
+      var rootFields = parseFields(payload);
+      var parts = [];
+      var wifi = firstFieldByNumber(rootFields, 2);
+      if (wifi && wifi.wireType === 2) {
+        var wifiLocation = firstFieldByNumber(parseFields(wifi.valueBytes), 2);
+        parts.push("firstWifi=" + (wifiLocation ? locationSummary(wifiLocation.valueBytes) : "<missing>"));
+      }
+      var cell = firstFieldByNumber(rootFields, 22);
+      if (cell && cell.wireType === 2) {
+        var cellLocation = firstFieldByNumber(parseFields(cell.valueBytes), 5);
+        parts.push("firstCell=" + (cellLocation ? locationSummary(cellLocation.valueBytes) : "<missing>"));
+      }
+      return parts.length ? parts.join(", ") : "no wifi/cell location fields";
+    } catch (err) {
+      return "summary failed: " + err.message;
+    }
+  }
+
   function coordToInt(value) {
-    return Math.trunc(Number(value) * 100000000);
+    return Math.round(Number(value) * 100000000);
   }
 
   function normalizeConfig(input) {
@@ -988,6 +1038,7 @@
           var responseResult = spoofAppleResponse(responseBody, config);
           if (config.debug) {
             console.log("Location spoofer patched " + responseResult.wifiCount + " wifi devices, " + responseResult.cellCount + " cell towers, kind=" + responseResult.kind + ", response=" + responseResult.response.length + " bytes");
+            console.log("Location spoofer patched locations: " + patchedPayloadSummary(responseResult.payload));
           }
           doneRewriteResponse(responseResult.response, {
             wifiCount: responseResult.wifiCount,
@@ -1022,6 +1073,7 @@
         var requestResult = spoofArpcRequest(requestBody, config);
         if (config.debug) {
           console.log("Location spoofer request synthetic response: patched " + requestResult.wifiCount + " wifi devices, " + requestResult.cellCount + " cell towers, response=" + requestResult.response.length + " bytes");
+          console.log("Location spoofer patched locations: " + patchedPayloadSummary(requestResult.payload));
         }
         doneSyntheticResponse(requestResult.response, {
           wifiCount: requestResult.wifiCount,
@@ -1067,6 +1119,9 @@
     makeLengthDelimitedField: makeLengthDelimitedField,
     parseFields: parseFields,
     tryParseFields: tryParseFields,
+    firstFieldByNumber: firstFieldByNumber,
+    locationSummary: locationSummary,
+    patchedPayloadSummary: patchedPayloadSummary,
     coordToInt: coordToInt,
     normalizeConfig: normalizeConfig,
     patchLocation: patchLocation,

@@ -22,7 +22,7 @@ timezone: America/Los_Angeles
 在 Shadowrocket 中导入主模块：
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response1
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response2
 ```
 
 然后按下面步骤配置：
@@ -120,6 +120,7 @@ Location spoofer patched 2 wifi devices, 0 cell towers, kind=synthetic
 
 ```text
 Location spoofer patched 0 wifi devices, 100+ cell towers, kind=synthetic
+Location spoofer patched locations: firstCell=37.33490000,-122.00902000
 ```
 
 这也是正常的，说明蜂窝基站结果已经被 patch。

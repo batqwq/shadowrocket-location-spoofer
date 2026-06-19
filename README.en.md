@@ -24,7 +24,7 @@ timezone: America/Los_Angeles
 Import the main module in Shadowrocket:
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response1
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response2
 ```
 
 Then:
@@ -129,6 +129,7 @@ On LTE/cellular, logs may show:
 
 ```text
 Location spoofer patched 0 wifi devices, 100+ cell towers, kind=synthetic
+Location spoofer patched locations: firstCell=37.33490000,-122.00902000
 ```
 
 That is expected. It means cellular tower responses were patched.

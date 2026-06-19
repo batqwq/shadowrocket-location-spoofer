@@ -211,6 +211,11 @@ function testCellTowerResponseRewritePath() {
 
   const extraction = spoofer.extractAppleWLocPayload(result.response);
   const rootFields = spoofer.parseFields(extraction.payload);
+  assert.strictEqual(
+    spoofer.patchedPayloadSummary(extraction.payload),
+    "firstCell=37.33490000,-122.00902000",
+    "patched cell summary"
+  );
   assert.strictEqual(fieldsByNumber(rootFields, 2).length, 0, "wifi count remains zero");
   assert.strictEqual(fieldsByNumber(rootFields, 3).length, 0, "num_cell_results dropped");
   assert.strictEqual(fieldsByNumber(rootFields, 4).length, 0, "num_wifi_results dropped");
