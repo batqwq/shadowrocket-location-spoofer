@@ -57,6 +57,27 @@ function makeFixturePayload() {
   ]);
 }
 
+function makeCellTowerPayload(withLocation) {
+  const parts = [
+    spoofer.makeVarintField(1, 460),
+    spoofer.makeVarintField(2, 11),
+    spoofer.makeVarintField(3, 188743680),
+    spoofer.makeVarintField(4, 41233)
+  ];
+
+  if (withLocation) {
+    parts.push(spoofer.makeLengthDelimitedField(5, spoofer.concatBytes([
+      spoofer.makeVarintField(1, 111),
+      spoofer.makeVarintField(2, 222),
+      spoofer.makeVarintField(9, 987654321)
+    ])));
+  }
+
+  parts.push(spoofer.makeVarintField(6, 38400));
+  parts.push(spoofer.makeVarintField(7, 9));
+  return spoofer.concatBytes(parts);
+}
+
 function makeFixtureArpc(payload, functionId) {
   return spoofer.serializeArpc({
     version: 1,
@@ -68,6 +89,23 @@ function makeFixtureArpc(payload, functionId) {
   });
 }
 
+function assertPatchedLocation(locationPayload, config, label) {
+  const locationFields = spoofer.parseFields(locationPayload);
+  const expectedLat = BigInt(spoofer.coordToInt(config.latitude));
+  const expectedLon = BigInt.asUintN(64, BigInt(spoofer.coordToInt(config.longitude)));
+
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 1)), expectedLat, `${label} lat`);
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 2)), expectedLon, `${label} lon`);
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 3)), BigInt(config.horizontalAccuracy), `${label} horizontal`);
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 4)), BigInt(config.unknownValue4), `${label} unknown4`);
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 5)), BigInt(config.altitude), `${label} altitude`);
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 6)), BigInt(config.verticalAccuracy), `${label} vertical`);
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 11)), BigInt(config.motionActivityType), `${label} motion type`);
+  assert.strictEqual(varintFieldValue(firstField(locationFields, 12)), BigInt(config.motionActivityConfidence), `${label} motion confidence`);
+
+  return locationFields;
+}
+
 function assertPatchedPayload(payload, config) {
   const rootFields = spoofer.parseFields(payload);
   assert.strictEqual(fieldsByNumber(rootFields, 2).length, 2, "wifi device count");
@@ -76,9 +114,6 @@ function assertPatchedPayload(payload, config) {
   assert.strictEqual(fieldsByNumber(rootFields, 33).length, 0, "device_type dropped");
   assert.strictEqual(fieldsByNumber(rootFields, 5).length, 1, "unrelated root field preserved");
 
-  const expectedLat = BigInt(spoofer.coordToInt(config.latitude));
-  const expectedLon = BigInt.asUintN(64, BigInt(spoofer.coordToInt(config.longitude)));
-
   const wifiFields = fieldsByNumber(rootFields, 2);
   wifiFields.forEach((wifiField, index) => {
     const wifiFieldsInner = spoofer.parseFields(wifiField.valueBytes);
@@ -86,14 +121,7 @@ function assertPatchedPayload(payload, config) {
     const locationField = firstField(wifiFieldsInner, 2);
     const locationFields = spoofer.parseFields(locationField.valueBytes);
 
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 1)), expectedLat, `wifi ${index} lat`);
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 2)), expectedLon, `wifi ${index} lon`);
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 3)), BigInt(config.horizontalAccuracy));
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 4)), BigInt(config.unknownValue4));
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 5)), BigInt(config.altitude));
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 6)), BigInt(config.verticalAccuracy));
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 11)), BigInt(config.motionActivityType));
-    assert.strictEqual(varintFieldValue(firstField(locationFields, 12)), BigInt(config.motionActivityConfidence));
+    assertPatchedLocation(locationField.valueBytes, config, `wifi ${index}`);
 
     if (index === 0) {
       assert.strictEqual(varintFieldValue(firstField(locationFields, 9)), 123456789n, "existing location metadata preserved");
@@ -155,6 +183,54 @@ function testResponseRewritePath() {
   const extraction = spoofer.extractAppleWLocPayload(result.response);
   assert.strictEqual(extraction.kind, "synthetic");
   assertPatchedPayload(extraction.payload, config);
+}
+
+function testCellTowerResponseRewritePath() {
+  const config = {
+    mode: "response",
+    latitude: 37.3349,
+    longitude: -122.00902,
+    horizontalAccuracy: 39,
+    verticalAccuracy: 1000,
+    altitude: 530,
+    unknownValue4: 3,
+    motionActivityType: 63,
+    motionActivityConfidence: 467
+  };
+
+  const payload = spoofer.concatBytes([
+    spoofer.makeLengthDelimitedField(22, makeCellTowerPayload(true)),
+    spoofer.makeLengthDelimitedField(22, makeCellTowerPayload(false)),
+    spoofer.makeVarintField(3, 1),
+    spoofer.makeVarintField(4, 0)
+  ]);
+
+  const result = spoofer.spoofAppleResponse(spoofer.buildAppleWLocResponse(payload), config);
+  assert.strictEqual(result.wifiCount, 0);
+  assert.strictEqual(result.cellCount, 2);
+
+  const extraction = spoofer.extractAppleWLocPayload(result.response);
+  const rootFields = spoofer.parseFields(extraction.payload);
+  assert.strictEqual(fieldsByNumber(rootFields, 2).length, 0, "wifi count remains zero");
+  assert.strictEqual(fieldsByNumber(rootFields, 3).length, 0, "num_cell_results dropped");
+  assert.strictEqual(fieldsByNumber(rootFields, 4).length, 0, "num_wifi_results dropped");
+
+  const cells = fieldsByNumber(rootFields, 22);
+  assert.strictEqual(cells.length, 2, "cell tower response count");
+  cells.forEach((cellField, index) => {
+    const cellFields = spoofer.parseFields(cellField.valueBytes);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 1)), 460n, `cell ${index} mcc`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 2)), 11n, `cell ${index} mnc`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 3)), 188743680n, `cell ${index} id`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 4)), 41233n, `cell ${index} tac`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 6)), 38400n, `cell ${index} uarfcn`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 7)), 9n, `cell ${index} pid`);
+
+    const locationFields = assertPatchedLocation(firstField(cellFields, 5).valueBytes, config, `cell ${index}`);
+    if (index === 0) {
+      assert.strictEqual(varintFieldValue(firstField(locationFields, 9)), 987654321n, "existing cell location metadata preserved");
+    }
+  });
 }
 
 function testBinaryRoundTrip() {
@@ -382,6 +458,7 @@ function testMarkerWriteBack() {
 // Run all tests.
 testArpcRequestPath();
 testResponseRewritePath();
+testCellTowerResponseRewritePath();
 testRealResponseExtraction();
 testBarePayloadExtraction();
 testBinaryRoundTrip();

@@ -407,22 +407,48 @@
     return concatBytes(parts);
   }
 
+  function patchCellTower(cellPayload, config) {
+    var fields = parseFields(cellPayload);
+    var parts = [];
+    var patchedLocation = false;
+
+    for (var i = 0; i < fields.length; i += 1) {
+      var field = fields[i];
+      if (field.fieldNumber === 5 && field.wireType === 2) {
+        parts.push(makeLengthDelimitedField(5, patchLocation(field.valueBytes, config)));
+        patchedLocation = true;
+      } else {
+        parts.push(field.raw);
+      }
+    }
+
+    if (!patchedLocation) {
+      parts.push(makeLengthDelimitedField(5, patchLocation(bytesFromArray([]), config)));
+    }
+
+    return concatBytes(parts);
+  }
+
   function patchAppleWLocPayload(payload, config) {
     var fields = parseFields(payload);
     var parts = [];
     var wifiCount = 0;
+    var cellCount = 0;
 
     for (var i = 0; i < fields.length; i += 1) {
       var field = fields[i];
       if (field.fieldNumber === 2 && field.wireType === 2) {
         parts.push(makeLengthDelimitedField(2, patchWifiDevice(field.valueBytes, config)));
         wifiCount += 1;
+      } else if (field.fieldNumber === 22 && field.wireType === 2) {
+        parts.push(makeLengthDelimitedField(22, patchCellTower(field.valueBytes, config)));
+        cellCount += 1;
       } else if (!ROOT_DROP_FIELDS[field.fieldNumber]) {
         parts.push(field.raw);
       }
     }
 
-    return { payload: concatBytes(parts), wifiCount: wifiCount };
+    return { payload: concatBytes(parts), wifiCount: wifiCount, cellCount: cellCount };
   }
 
   function readPascalString(bytes, state) {
@@ -589,6 +615,7 @@
       response: buildAppleWLocResponse(patched.payload),
       payload: patched.payload,
       wifiCount: patched.wifiCount,
+      cellCount: patched.cellCount,
       arpc: arpc
     };
   }
@@ -629,6 +656,7 @@
       response: response,
       payload: patched.payload,
       wifiCount: patched.wifiCount,
+      cellCount: patched.cellCount,
       kind: extraction.kind
     };
   }
@@ -885,6 +913,7 @@
     var headers = headersWithBinaryBody({}, bytes.length);
     if (info && info.debug) {
       headers["X-Location-Spoofer-Wifi-Count"] = String(info.wifiCount);
+      headers["X-Location-Spoofer-Cell-Count"] = String(info.cellCount || 0);
     }
     $done({
       response: {
@@ -900,6 +929,7 @@
     var headers = headersWithBinaryBody(sourceHeaders, bytes.length);
     if (info && info.debug) {
       headers["X-Location-Spoofer-Wifi-Count"] = String(info.wifiCount);
+      headers["X-Location-Spoofer-Cell-Count"] = String(info.cellCount || 0);
     }
     $done({
       headers: headers,
@@ -957,10 +987,11 @@
           }
           var responseResult = spoofAppleResponse(responseBody, config);
           if (config.debug) {
-            console.log("Location spoofer patched " + responseResult.wifiCount + " wifi devices, kind=" + responseResult.kind + ", response=" + responseResult.response.length + " bytes");
+            console.log("Location spoofer patched " + responseResult.wifiCount + " wifi devices, " + responseResult.cellCount + " cell towers, kind=" + responseResult.kind + ", response=" + responseResult.response.length + " bytes");
           }
           doneRewriteResponse(responseResult.response, {
             wifiCount: responseResult.wifiCount,
+            cellCount: responseResult.cellCount,
             debug: config.debug
           });
           return;
@@ -990,10 +1021,11 @@
         }
         var requestResult = spoofArpcRequest(requestBody, config);
         if (config.debug) {
-          console.log("Location spoofer request synthetic response: patched " + requestResult.wifiCount + " wifi devices, response=" + requestResult.response.length + " bytes");
+          console.log("Location spoofer request synthetic response: patched " + requestResult.wifiCount + " wifi devices, " + requestResult.cellCount + " cell towers, response=" + requestResult.response.length + " bytes");
         }
         doneSyntheticResponse(requestResult.response, {
           wifiCount: requestResult.wifiCount,
+          cellCount: requestResult.cellCount,
           debug: config.debug
         });
       } catch (err) {
@@ -1039,6 +1071,7 @@
     normalizeConfig: normalizeConfig,
     patchLocation: patchLocation,
     patchWifiDevice: patchWifiDevice,
+    patchCellTower: patchCellTower,
     patchAppleWLocPayload: patchAppleWLocPayload,
     parseArpc: parseArpc,
     serializeArpc: serializeArpc,

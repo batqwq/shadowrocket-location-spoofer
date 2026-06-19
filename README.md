@@ -22,9 +22,9 @@ the ARPC/protobuf patching logic in JavaScript.
 3. Import this URL in Shadowrocket:
    `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule`
    For diagnostics, import the request-only module instead:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-binary-request1`
+   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-cell-request1`
    To inspect the raw response fields exposed by Shadowrocket, import:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-response-probe.sgmodule?v=20260619-binary-probe1`
+   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-response-probe.sgmodule?v=20260619-cell-probe1`
 4. Install and fully trust Shadowrocket's MITM certificate in iOS Settings.
 5. Enable the module, start Shadowrocket, then toggle iOS Location Services off
    and on before testing Maps.
@@ -87,6 +87,9 @@ It patches Wi-Fi location results in the AppleWLoc protobuf:
 - latitude and longitude are encoded as `coord * 1e8`
 - horizontal accuracy, vertical accuracy, altitude, motion type, and motion
   confidence mirror the upstream Go implementation defaults
+- cellular tower response locations are patched too, for cases where iOS sends
+  `/clls/wloc` over LTE and Apple returns `cell_tower_response` entries instead
+  of Wi-Fi entries
 - root fields `num_cell_results`, `num_wifi_results`, and `device_type` are
   removed, matching the original implementation
 
