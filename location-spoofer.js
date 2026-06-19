@@ -10,7 +10,7 @@
 
   var DEFAULT_CONFIG = {
     enabled: true,
-    mode: "request",
+    mode: "response",
     latitude: 37.3349,
     longitude: -122.00902,
     horizontalAccuracy: 39,
@@ -23,7 +23,14 @@
     debug: false
   };
 
+  // Prefix prepended to a SPOOFED (synthesized) response. Mirrors the original Go
+  // `initialBytes = 0001000000010000` from main.go:253.
   var APPLE_WLOC_PREFIX = bytesFromArray([0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00]);
+
+  // Stable marker that precedes the AppleWLoc protobuf inside a REAL Apple /clls/wloc
+  // response. After the marker come 2 bytes (uint16 BE payload length) then the payload.
+  // Validated against zadewg/GS-LOC and the acheong08 research.
+  var APPLE_WLOC_MARKER = bytesFromArray([0x00, 0x00, 0x00, 0x01, 0x00, 0x00]);
   var ROOT_DROP_FIELDS = { 3: true, 4: true, 33: true };
   var LOCATION_REPLACED_FIELDS = {
     1: true,
@@ -66,6 +73,30 @@
       }
     }
     return true;
+  }
+
+  // Search for a byte sequence within bytes; returns last index or -1.
+  // The Apple /clls/wloc response wraps the AppleWLoc protobuf in a variable-length
+  // ARPC framing header (locale/identifier/osVersion pascal strings). The header is
+  // followed by a stable marker (00 00 00 01 00 00) + uint16 BE length + payload.
+  // See zadewg/GS-LOC client.py and Mika Tuupola's reverse-engineering write-up.
+  function findBytes(bytes, marker) {
+    if (!bytes || !marker || marker.length === 0) {
+      return -1;
+    }
+    for (var i = bytes.length - marker.length; i >= 0; i -= 1) {
+      var ok = true;
+      for (var j = 0; j < marker.length; j += 1) {
+        if (bytes[i + j] !== marker[j]) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   function binaryStringToBytes(value) {
@@ -304,7 +335,8 @@
     }
 
     cfg.enabled = cfg.enabled !== false;
-    cfg.mode = String(cfg.mode || "request").toLowerCase() === "response" ? "response" : "request";
+    var mode = String(cfg.mode || "request").toLowerCase();
+    cfg.mode = mode === "response" || mode === "prepare" ? mode : "request";
     cfg.latitude = Number(cfg.latitude);
     cfg.longitude = Number(cfg.longitude);
     cfg.horizontalAccuracy = Math.trunc(Number(cfg.horizontalAccuracy));
@@ -445,16 +477,61 @@
     return concatBytes([APPLE_WLOC_PREFIX, writeUInt16BE(payload.length), payload]);
   }
 
+  // Extract the AppleWLoc protobuf payload from a /clls/wloc response body.
+  // Accepts three shapes:
+  //   1. A spoofed (synthetic) response carrying APPLE_WLOC_PREFIX (8 bytes) + uint16 len.
+  //   2. A real Apple response whose variable-length ARPC header is followed by
+  //      APPLE_WLOC_MARKER (6 bytes) + uint16 len + payload.
+  //   3. A bare protobuf payload (field tag 0x12 = wifi device, wire type 2).
   function extractAppleWLocPayload(responseBytes) {
-    if (!bytesEqualPrefix(responseBytes, APPLE_WLOC_PREFIX) || responseBytes.length < APPLE_WLOC_PREFIX.length + 2) {
-      throw new Error("missing Apple WLoc response prefix");
+    if (!responseBytes || responseBytes.length < 2) {
+      throw new Error("Apple WLoc response too short");
     }
-    var payloadOffset = APPLE_WLOC_PREFIX.length + 2;
-    var payloadLength = readUInt16BE(responseBytes, APPLE_WLOC_PREFIX.length);
-    if (payloadOffset + payloadLength > responseBytes.length) {
-      throw new Error("Apple WLoc payload length exceeds buffer");
+
+    // Shape 1: spoofed synthetic response.
+    if (bytesEqualPrefix(responseBytes, APPLE_WLOC_PREFIX)) {
+      if (responseBytes.length < APPLE_WLOC_PREFIX.length + 2) {
+        throw new Error("Apple WLoc synthetic response truncated");
+      }
+      var payloadOffset = APPLE_WLOC_PREFIX.length + 2;
+      var payloadLength = readUInt16BE(responseBytes, APPLE_WLOC_PREFIX.length);
+      if (payloadOffset + payloadLength > responseBytes.length) {
+        throw new Error("Apple WLoc payload length exceeds buffer");
+      }
+      return responseBytes.slice(payloadOffset, payloadOffset + payloadLength);
     }
-    return responseBytes.slice(payloadOffset, payloadOffset + payloadLength);
+
+    // Shape 2: real Apple response with marker.
+    var markerIdx = findBytes(responseBytes, APPLE_WLOC_MARKER);
+    if (markerIdx >= 0) {
+      var lenOffset = markerIdx + APPLE_WLOC_MARKER.length;
+      if (lenOffset + 2 <= responseBytes.length) {
+        var realLen = readUInt16BE(responseBytes, lenOffset);
+        var realPayloadOffset = lenOffset + 2;
+        if (realLen > 0 && realPayloadOffset + realLen <= responseBytes.length) {
+          return responseBytes.slice(realPayloadOffset, realPayloadOffset + realLen);
+        }
+      }
+    }
+
+    // Shape 3: bare protobuf payload (best effort).
+    if (looksLikeAppleWLocPayload(responseBytes)) {
+      return responseBytes;
+    }
+
+    throw new Error("missing Apple WLoc response prefix");
+  }
+
+  // Heuristic: a valid AppleWLoc payload starts with a protobuf tag whose wire type
+  // is 0 or 2 and field number is > 0. Field 2 (wifi) tag is 0x12.
+  function looksLikeAppleWLocPayload(bytes) {
+    if (!bytes || bytes.length === 0) {
+      return false;
+    }
+    var tag = bytes[0];
+    var fieldNumber = tag >> 3;
+    var wireType = tag & 0x7;
+    return fieldNumber > 0 && (wireType === 0 || wireType === 2);
   }
 
   function spoofArpcRequest(requestBytes, configInput) {
@@ -605,6 +682,66 @@
     return headers;
   }
 
+  function setHeader(headers, name, value) {
+    headers = headers || {};
+    var lower = name.toLowerCase();
+    var existingKey = null;
+    for (var key in headers) {
+      if (Object.prototype.hasOwnProperty.call(headers, key) && key.toLowerCase() === lower) {
+        existingKey = key;
+        break;
+      }
+    }
+    headers[existingKey || name] = value;
+    return headers;
+  }
+
+  function prepareRequestHeaders(headers) {
+    return setHeader(headers || {}, "Accept-Encoding", "identity");
+  }
+
+  // Decode an HTTP response body string that may be gzip/deflate/br encoded.
+  // Shadowrocket exposes $persistentStore-free helpers on $utils in newer builds;
+  // older builds leave the body already-decompressed. Fall back to the raw body.
+  function decompressBody(body, contentEncoding) {
+    if (!body || !contentEncoding) {
+      return body;
+    }
+    var enc = String(contentEncoding).toLowerCase();
+    if (enc === "identity" || enc === "") {
+      return body;
+    }
+    try {
+      if (enc.indexOf("gzip") >= 0 && typeof $utils !== "undefined" && $utils.ungzip) {
+        return $utils.ungzip(body);
+      }
+      if (enc.indexOf("deflate") >= 0 && typeof $utils !== "undefined" && $utils.inflate) {
+        return $utils.inflate(body);
+      }
+      if (enc.indexOf("br") >= 0 && typeof $utils !== "undefined" && $utils.brotliDecompress) {
+        return $utils.brotliDecompress(body);
+      }
+    } catch (err) {
+      if (typeof console !== "undefined") {
+        console.log("Location spoofer decompress failed (" + enc + "): " + err.message);
+      }
+    }
+    return body;
+  }
+
+  function headerValue(headers, name) {
+    if (!headers) {
+      return undefined;
+    }
+    var lower = name.toLowerCase();
+    for (var key in headers) {
+      if (Object.prototype.hasOwnProperty.call(headers, key) && key.toLowerCase() === lower) {
+        return headers[key];
+      }
+    }
+    return undefined;
+  }
+
   function donePassThrough() {
     $done({});
   }
@@ -647,22 +784,29 @@
           return;
         }
 
+        if (!hasResponse && config.mode === "prepare") {
+          $done({ headers: prepareRequestHeaders($request.headers || {}) });
+          return;
+        }
+
         if (hasResponse) {
           if (config.mode !== "response") {
             donePassThrough();
             return;
           }
-          var responseBody = messageBodyToBytes($response);
-          if (!responseBody) {
-            if (config.debug) {
-              console.log("Location spoofer response body unavailable");
+          var respHeaders = ($response && $response.headers) || {};
+          var contentEncoding = headerValue(respHeaders, "Content-Encoding");
+          var rawRespBody = $response && ($response.body != null ? $response.body : $response.bodyBytes);
+          if (rawRespBody != null && contentEncoding) {
+            var decoded = decompressBody(rawRespBody, contentEncoding);
+            if (decoded !== rawRespBody) {
+              $response.body = decoded;
             }
-            donePassThrough();
-            return;
           }
-          if (responseBody.length < APPLE_WLOC_PREFIX.length + 2) {
+          var responseBody = messageBodyToBytes($response);
+          if (!responseBody || responseBody.length < 2) {
             if (config.debug) {
-              console.log("Location spoofer response body too short: " + responseBody.length + " bytes, head=" + hexPreview(responseBody));
+              console.log("Location spoofer response body too short: " + (responseBody ? responseBody.length : 0) + " bytes, head=" + (responseBody ? hexPreview(responseBody) : "<none>") + ", enc=" + (contentEncoding || "none"));
             }
             donePassThrough();
             return;
@@ -744,7 +888,8 @@
     extractAppleWLocPayload: extractAppleWLocPayload,
     spoofArpcRequest: spoofArpcRequest,
     spoofAppleResponse: spoofAppleResponse,
-    parseArgumentString: parseArgumentString
+    parseArgumentString: parseArgumentString,
+    prepareRequestHeaders: prepareRequestHeaders
   };
 
   if (typeof module !== "undefined" && module.exports) {

@@ -156,8 +156,68 @@ function testBinaryRoundTrip() {
   assert.deepStrictEqual(Array.from(spoofer.binaryStringToBytes(body)), Array.from(bytes));
 }
 
+function testPrepareRequestHeaders() {
+  const headers = spoofer.prepareRequestHeaders({
+    "User-Agent": "locationd/3164",
+    "accept-encoding": "gzip, deflate, br"
+  });
+  assert.strictEqual(headers["accept-encoding"], "identity");
+  assert.strictEqual(headers["User-Agent"], "locationd/3164");
+}
+
+// Build a realistic Apple /clls/wloc response: variable-length ARPC header
+// (version + locale/app id/os version pascal strings) then the stable marker
+// 00 00 00 01 00 00 + uint16 BE payload length + AppleWLoc protobuf payload.
+function makeRealAppleResponse(payload) {
+  const pascal = (s) => spoofer.concatBytes([new Uint8Array([s.length >> 8, s.length & 0xff]), b(s)]);
+  const header = spoofer.concatBytes([
+    new Uint8Array([0x00, 0x01]),
+    pascal("en_US"),
+    pascal("com.apple.locationd"),
+    pascal("27.0.0"),
+    new Uint8Array([0x00, 0x00, 0x00, 0x02])
+  ]);
+  const marker = new Uint8Array([0x00, 0x00, 0x00, 0x01, 0x00, 0x00]);
+  const lenBytes = new Uint8Array([payload.length >> 8, payload.length & 0xff]);
+  return spoofer.concatBytes([header, marker, lenBytes, payload]);
+}
+
+function testRealResponseExtraction() {
+  const config = {
+    mode: "response",
+    latitude: 48.858844,
+    longitude: 2.294351,
+    horizontalAccuracy: 39,
+    verticalAccuracy: 1000,
+    altitude: 35,
+    unknownValue4: 3,
+    motionActivityType: 63,
+    motionActivityConfidence: 467
+  };
+
+  const realResponse = makeRealAppleResponse(makeFixturePayload());
+
+  // Extractor should locate the payload past the variable-length header + marker.
+  const extracted = spoofer.extractAppleWLocPayload(realResponse);
+  assert.strictEqual(extracted.length, makeFixturePayload().length);
+
+  // Full spoof path on a real-shape response must patch all wifi devices.
+  const result = spoofer.spoofAppleResponse(realResponse, config);
+  assert.strictEqual(result.wifiCount, 2);
+  assertPatchedPayload(spoofer.extractAppleWLocPayload(result.response), config);
+}
+
+function testBarePayloadExtraction() {
+  const payload = makeFixturePayload();
+  const extracted = spoofer.extractAppleWLocPayload(payload);
+  assert.strictEqual(extracted.length, payload.length);
+}
+
 testArpcRequestPath();
 testResponseRewritePath();
+testRealResponseExtraction();
+testBarePayloadExtraction();
 testBinaryRoundTrip();
+testPrepareRequestHeaders();
 
 console.log("All location spoofer tests passed.");
