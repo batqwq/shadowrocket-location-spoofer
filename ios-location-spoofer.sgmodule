@@ -1,25 +1,16 @@
 #!name=iOS Location Spoofer
-#!desc=Shadowrocket module port of acheong08/ios-location-spoofer. Spoofs Apple Wi-Fi location responses by rewriting the binary /clls/wloc response.
+#!desc=Shadowrocket module port of acheong08/ios-location-spoofer. Spoofs Apple Wi-Fi location by patching /clls/wloc.
 #!author=Codex port, original research/code by acheong08
 #!homepage=https://github.com/acheong08/ios-location-spoofer
 
 [Script]
-# Prepare path: force the Apple location response to be uncompressed so the
-# response script can patch the binary AppleWLoc payload deterministically.
-iOS Location Spoofer Prepare = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=prepare&debug=true
+# Primary path: synthesize the Apple location response directly from the
+# intercepted ARPC request, matching the original Go implementation.
+iOS Location Spoofer Request = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=true,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=request&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
 
-# Primary path: rewrite Apple's real /clls/wloc response. This is the reliable
-# hook in Shadowrocket -- the response body is complete and carries the stable
-# ARPC marker (00 00 00 01 00 00) before the AppleWLoc protobuf payload.
-# Default coordinates point to Apple Park (Cupertino). Override via argument.
+# Fallback path: if the request hook cannot read the POST body, rewrite Apple's
+# real response body when Shadowrocket exposes it.
 iOS Location Spoofer Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=true,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=response&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
-
-# Optional fallback: synthesize the response directly from the intercepted ARPC
-# request. Disabled by default because Shadowrocket delivers the POST body to the
-# http-request hook asynchronously; on some builds the body is not yet available
-# when the script runs. Enable with mode=request only if your build reliably
-# exposes $request.body for binary POST bodies.
-# iOS Location Spoofer Request = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=true,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=request&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
 
 [MITM]
 hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com

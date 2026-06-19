@@ -26,9 +26,10 @@ the ARPC/protobuf patching logic in JavaScript.
    and on before testing Maps.
 
 The published module passes the Apple Park coordinate inline through the script
-argument. It uses a small request header preparation hook plus a response-body
-rewrite hook. `location-spoofer-config.json` is kept as an editable reference and
-for users who want to host a remote config URL themselves.
+argument. It uses a request-body hook to synthesize the Apple WLoc response, then
+falls back to response-body rewriting if Shadowrocket cannot expose the request
+body. `location-spoofer-config.json` is kept as an editable reference and for
+users who want to host a remote config URL themselves.
 
 ## Config
 
@@ -37,7 +38,7 @@ The default coordinate is Apple Park in Cupertino, California.
 ```json
 {
   "enabled": true,
-  "mode": "response",
+  "mode": "request",
   "latitude": 37.3349,
   "longitude": -122.00902,
   "horizontalAccuracy": 39,
@@ -51,12 +52,14 @@ The default coordinate is Apple Park in Cupertino, California.
 }
 ```
 
-`mode: "response"` is the default. Shadowrocket's request hook is used only to
-force `Accept-Encoding: identity`; the response hook then patches Apple's binary
-AppleWLoc payload.
+`mode: "request"` is the default in the published module. It matches the original
+Go implementation: read the ARPC request, patch the AppleWLoc protobuf, and
+return a synthetic binary response. If Shadowrocket cannot expose the request
+body, the script forwards the request with `Accept-Encoding: identity` and the
+response hook attempts to patch Apple's response.
 
-If the log says the response body is too short or still has no AppleWLoc marker,
-disable `HTTP/2 MitM` in Shadowrocket's HTTPS decryption settings and retry.
+If the log says the request body is too short or unavailable, disable `HTTP/2
+MitM` in Shadowrocket's HTTPS decryption settings and retry.
 
 ## What It Spoofs
 

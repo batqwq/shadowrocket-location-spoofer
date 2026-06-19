@@ -700,6 +700,16 @@
     return setHeader(headers || {}, "Accept-Encoding", "identity");
   }
 
+  function donePreparedRequestPassThrough() {
+    var headers = prepareRequestHeaders((typeof $request !== "undefined" && $request.headers) || {});
+    $done({
+      headers: headers,
+      request: {
+        headers: headers
+      }
+    });
+  }
+
   // Decode an HTTP response body string that may be gzip/deflate/br encoded.
   // Shadowrocket exposes $persistentStore-free helpers on $utils in newer builds;
   // older builds leave the body already-decompressed. Fall back to the raw body.
@@ -785,7 +795,7 @@
         }
 
         if (!hasResponse && config.mode === "prepare") {
-          $done({ headers: prepareRequestHeaders($request.headers || {}) });
+          donePreparedRequestPassThrough();
           return;
         }
 
@@ -828,14 +838,14 @@
           if (config.debug) {
             console.log("Location spoofer request body unavailable");
           }
-          donePassThrough();
+          donePreparedRequestPassThrough();
           return;
         }
         if (requestBody.length < 2) {
           if (config.debug) {
             console.log("Location spoofer request body too short: " + requestBody.length + " bytes, head=" + hexPreview(requestBody));
           }
-          donePassThrough();
+          donePreparedRequestPassThrough();
           return;
         }
         var requestResult = spoofArpcRequest(requestBody, config);
@@ -848,7 +858,11 @@
           console.log("Location spoofer failed: " + err.message);
         }
         if (config.failOpen !== false) {
-          donePassThrough();
+          if (hasRequest && !hasResponse) {
+            donePreparedRequestPassThrough();
+          } else {
+            donePassThrough();
+          }
           return;
         }
         $done({
