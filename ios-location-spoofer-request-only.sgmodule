@@ -1,0 +1,10 @@
+#!name=iOS Location Spoofer Request Only
+#!desc=Request-only diagnostic module for iOS Location Spoofer. Spoofs Apple Wi-Fi location by synthesizing /clls/wloc.
+#!author=Codex port, original research/code by acheong08
+#!homepage=https://github.com/acheong08/ios-location-spoofer
+
+[Script]
+iOS Location Spoofer Request Only = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=true,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-req-only,argument=mode=request&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
+
+[MITM]
+hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com

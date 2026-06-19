@@ -21,6 +21,8 @@ the ARPC/protobuf patching logic in JavaScript.
    `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/`
 3. Import this URL in Shadowrocket:
    `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule`
+   For diagnostics, import the request-only module instead:
+   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-req-only`
 4. Install and fully trust Shadowrocket's MITM certificate in iOS Settings.
 5. Enable the module, start Shadowrocket, then toggle iOS Location Services off
    and on before testing Maps.
@@ -58,8 +60,10 @@ return a synthetic binary response. If Shadowrocket cannot expose the request
 body, the script forwards the request with `Accept-Encoding: identity` and the
 response hook attempts to patch Apple's response.
 
-If the log says the request body is too short or unavailable, disable `HTTP/2
-MitM` in Shadowrocket's HTTPS decryption settings and retry.
+If the log says the request body is too short or unavailable, or if it only
+shows `Location spoofer response body too short: 0 bytes`, disable `HTTP/2
+MitM` in Shadowrocket's HTTPS decryption settings and retry with the
+request-only module.
 
 ## What It Spoofs
 

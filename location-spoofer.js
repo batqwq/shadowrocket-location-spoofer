@@ -837,10 +837,13 @@
     if (info && info.debug) {
       headers["X-Location-Spoofer-Wifi-Count"] = String(info.wifiCount);
     }
+    var body = bytesToBinaryString(bytes);
     $done({
-      status: "HTTP/1.1 200 OK",
-      headers: headers,
-      body: bytesToBinaryString(bytes)
+      response: {
+        status: "HTTP/1.1 200 OK",
+        headers: headers,
+        body: body
+      }
     });
   }
 
@@ -934,6 +937,9 @@
           return;
         }
         var requestResult = spoofArpcRequest(requestBody, config);
+        if (config.debug) {
+          console.log("Location spoofer request synthetic response: patched " + requestResult.wifiCount + " wifi devices, response=" + requestResult.response.length + " bytes");
+        }
         doneSyntheticResponse(requestResult.response, {
           wifiCount: requestResult.wifiCount,
           debug: config.debug
