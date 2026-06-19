@@ -10,7 +10,7 @@
 
   var DEFAULT_CONFIG = {
     enabled: true,
-    mode: "response",
+    mode: "request",
     latitude: 37.3349,
     longitude: -122.00902,
     horizontalAccuracy: 39,
@@ -916,6 +916,9 @@
           return;
         }
         var requestBody = messageBodyToBytes($request);
+        if (config.debug) {
+          console.log("Location spoofer request mode body length: " + (requestBody ? requestBody.length : 0));
+        }
         if (!requestBody) {
           if (config.debug) {
             console.log("Location spoofer request body unavailable");
