@@ -77,6 +77,8 @@ service and can be MITM-decrypted by Shadowrocket.
   module.
 - `ios-location-spoofer-inspect.sgmodule`: structured request/response
   diagnostic module.
+- `ios-location-spoofer-raw-dump.sgmodule`: full raw body base64 diagnostic
+  module.
 - `test-location-spoofer.js`: local Node.js test harness.
 - `NOTICE.md`: derivative-work notice, upstream credits, and licensing notes.
 - `LICENSE`: AGPL-3.0 license text.
@@ -129,6 +131,17 @@ https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-
 The `inspect` module does not modify traffic. It logs ARPC/protobuf summaries
 without dumping the full raw body, so BSSID and cellular tower data are not
 written wholesale into logs.
+
+Full raw dump diagnostic:
+
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-raw-dump.sgmodule?v=20260619-rawdump1
+```
+
+The `raw-dump` module does not modify traffic, but it writes full `/clls/wloc`
+request and response bodies into logs as base64 chunks. It may contain nearby
+Wi-Fi/BSSID and cellular tower data, so enable it only temporarily for deep
+debugging.
 
 When the module works, Shadowrocket logs should include something like:
 

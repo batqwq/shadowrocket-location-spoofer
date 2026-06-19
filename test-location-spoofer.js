@@ -274,6 +274,7 @@ function testBinaryRoundTrip() {
   const bytes = new Uint8Array([0, 1, 2, 127, 128, 255]);
   const body = spoofer.bytesToBinaryString(bytes);
   assert.deepStrictEqual(Array.from(spoofer.binaryStringToBytes(body)), Array.from(bytes));
+  assert.strictEqual(spoofer.bytesToBase64(bytes), "AAECf4D/");
 }
 
 function testPrepareRequestHeaders() {

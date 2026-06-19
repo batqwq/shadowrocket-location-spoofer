@@ -68,6 +68,7 @@ Shadowrocket HTTPS 解密并经过 Apple `/clls/wloc` 服务的定位流程。
 - `ios-location-spoofer-response-probe.sgmodule`：响应体诊断模块。
 - `ios-location-spoofer-request-only.sgmodule`：请求合成诊断模块。
 - `ios-location-spoofer-inspect.sgmodule`：结构化请求/响应诊断模块。
+- `ios-location-spoofer-raw-dump.sgmodule`：完整 raw body base64 诊断模块。
 - `test-location-spoofer.js`：本地 Node.js 测试。
 - `NOTICE.md`：派生说明、原项目引用和授权说明。
 - `LICENSE`：AGPL-3.0 许可证。
@@ -118,6 +119,15 @@ https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-
 
 `inspect` 模块不会修改流量，只会输出 ARPC/protobuf 摘要。它不会打印完整
 raw body，避免把 BSSID 和蜂窝基站信息写进日志。
+
+完整 raw dump 诊断：
+
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-raw-dump.sgmodule?v=20260619-rawdump1
+```
+
+`raw-dump` 模块不会修改流量，但会把 `/clls/wloc` 请求和响应 body 以 base64
+分块完整写入日志。它会包含附近 Wi-Fi/BSSID 和蜂窝基站信息，只在需要深入排查时临时启用。
 
 正常工作时，Shadowrocket 日志里应出现类似：
 

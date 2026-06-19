@@ -20,7 +20,9 @@
     motionActivityType: 63,
     motionActivityConfidence: 467,
     failOpen: true,
-    debug: false
+    debug: false,
+    dumpRaw: false,
+    rawLimit: 0
   };
 
   // Prefix prepended to a SPOOFED (synthesized) response. Mirrors the original Go
@@ -125,6 +127,22 @@
       chunks.push(String.fromCharCode.apply(null, Array.prototype.slice.call(chunk)));
     }
     return chunks.join("");
+  }
+
+  function bytesToBase64(bytes) {
+    var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    var out = "";
+    for (var i = 0; i < bytes.length; i += 3) {
+      var b0 = bytes[i];
+      var b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+      var b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+      var triplet = (b0 << 16) | (b1 << 8) | b2;
+      out += alphabet[(triplet >> 18) & 0x3f];
+      out += alphabet[(triplet >> 12) & 0x3f];
+      out += i + 1 < bytes.length ? alphabet[(triplet >> 6) & 0x3f] : "=";
+      out += i + 2 < bytes.length ? alphabet[triplet & 0x3f] : "=";
+    }
+    return out;
   }
 
   function hexPreview(bytes, limit) {
@@ -405,6 +423,11 @@
     cfg.unknownValue4 = Math.trunc(Number(cfg.unknownValue4));
     cfg.motionActivityType = Math.trunc(Number(cfg.motionActivityType));
     cfg.motionActivityConfidence = Math.trunc(Number(cfg.motionActivityConfidence));
+    cfg.dumpRaw = cfg.dumpRaw === true || String(cfg.dumpRaw).toLowerCase() === "true";
+    cfg.rawLimit = Math.trunc(Number(cfg.rawLimit || 0));
+    if (!Number.isFinite(cfg.rawLimit) || cfg.rawLimit < 0) {
+      cfg.rawLimit = 0;
+    }
 
     if (!Number.isFinite(cfg.latitude) || cfg.latitude < -90 || cfg.latitude > 90) {
       throw new Error("invalid latitude");
@@ -798,7 +821,9 @@
       "motionActivityType",
       "motionActivityConfidence",
       "failOpen",
-      "debug"
+      "debug",
+      "dumpRaw",
+      "rawLimit"
     ];
 
     if (args.config) {
@@ -1015,12 +1040,30 @@
     }
   }
 
-  function inspectResponseBytes(bytes) {
+  function logRawDump(label, bytes, config) {
+    if (!config.dumpRaw || !bytes) {
+      return;
+    }
+    var limit = config.rawLimit || 0;
+    var emitted = limit > 0 && bytes.length > limit ? bytes.slice(0, limit) : bytes;
+    var encoded = bytesToBase64(emitted);
+    var chunkSize = 3000;
+    var chunks = Math.max(1, Math.ceil(encoded.length / chunkSize));
+    console.log("Location spoofer raw " + label + " base64 begin: len=" + bytes.length + ", emitted=" + emitted.length + ", chunks=" + chunks + ", truncated=" + (emitted.length !== bytes.length));
+    for (var i = 0; i < encoded.length; i += chunkSize) {
+      var chunkIndex = Math.floor(i / chunkSize) + 1;
+      console.log("Location spoofer raw " + label + " base64 chunk " + chunkIndex + "/" + chunks + ": " + encoded.slice(i, i + chunkSize));
+    }
+    console.log("Location spoofer raw " + label + " base64 end");
+  }
+
+  function inspectResponseBytes(bytes, config) {
     if (!bytes) {
       console.log("Location spoofer inspect response body unavailable");
       return;
     }
     console.log("Location spoofer inspect response body: len=" + bytes.length + ", head=" + hexPreview(bytes, 48));
+    logRawDump("response", bytes, config);
     try {
       var extraction = extractAppleWLocPayload(bytes);
       console.log("Location spoofer inspect response extraction: kind=" + extraction.kind + ", prefix=" + (extraction.prefix ? hexPreview(extraction.prefix, 8) : "<none>") + ", payloadLen=" + extraction.payload.length + ", suffixLen=" + (extraction.suffix ? extraction.suffix.length : 0));
@@ -1034,12 +1077,13 @@
     }
   }
 
-  function inspectRequestBytes(bytes) {
+  function inspectRequestBytes(bytes, config) {
     if (!bytes) {
       console.log("Location spoofer inspect request body unavailable");
       return;
     }
     console.log("Location spoofer inspect request body: len=" + bytes.length + ", head=" + hexPreview(bytes, 48));
+    logRawDump("request", bytes, config);
     try {
       var arpc = parseArpc(bytes);
       console.log("Location spoofer inspect request arpc: version=" + arpc.version + ", functionId=" + arpc.functionId + ", locale=" + arpc.locale + ", app=" + arpc.appIdentifier + ", os=" + arpc.osVersion + ", payloadLen=" + arpc.payload.length);
@@ -1055,9 +1099,9 @@
 
   function doneInspect(config, hasResponse) {
     if (hasResponse) {
-      inspectResponseBytes(messageBodyToBytes($response));
+      inspectResponseBytes(messageBodyToBytes($response), config);
     } else {
-      inspectRequestBytes(messageBodyToBytes($request));
+      inspectRequestBytes(messageBodyToBytes($request), config);
     }
     donePassThrough();
   }
@@ -1229,6 +1273,7 @@
     messageBodyToBytes: messageBodyToBytes,
     hexPreview: hexPreview,
     bytesToBinaryString: bytesToBinaryString,
+    bytesToBase64: bytesToBase64,
     binaryStringToBytes: binaryStringToBytes,
     concatBytes: concatBytes,
     readUInt16BE: readUInt16BE,
