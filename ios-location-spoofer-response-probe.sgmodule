@@ -1,0 +1,10 @@
+#!name=iOS Location Spoofer Response Probe
+#!desc=Diagnostic module for iOS Location Spoofer. Logs the /clls/wloc response fields exposed by Shadowrocket.
+#!author=Codex port, original research/code by acheong08
+#!homepage=https://github.com/acheong08/ios-location-spoofer
+
+[Script]
+iOS Location Spoofer Response Probe = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,max-size=0,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-probe,argument=mode=probe&debug=true
+
+[MITM]
+hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com

@@ -23,6 +23,8 @@ the ARPC/protobuf patching logic in JavaScript.
    `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule`
    For diagnostics, import the request-only module instead:
    `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-req-only2`
+   To inspect the raw response fields exposed by Shadowrocket, import:
+   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-response-probe.sgmodule?v=20260619-probe`
 4. Install and fully trust Shadowrocket's MITM certificate in iOS Settings.
 5. Enable the module, start Shadowrocket, then toggle iOS Location Services off
    and on before testing Maps.
@@ -64,6 +66,10 @@ If the response-only module logs `Location spoofer response body too short: 0
 bytes`, Shadowrocket is also not exposing the Apple response body. In that case a
 pure Shadowrocket module cannot complete the original MITM technique on that
 build; use the original PacketTunnel/local proxy approach instead.
+
+The response probe module logs which `$response` fields Shadowrocket exposes
+(`body`, `bodyBytes`, `rawBody`, and `binaryBody`) so this can be confirmed from
+PacketTunnel logs without changing traffic.
 
 ## What It Spoofs
 

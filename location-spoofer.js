@@ -345,8 +345,8 @@
     }
 
     cfg.enabled = cfg.enabled !== false;
-    var mode = String(cfg.mode || "request").toLowerCase();
-    cfg.mode = mode === "response" || mode === "prepare" ? mode : "request";
+    var mode = String(cfg.mode || "response").toLowerCase();
+    cfg.mode = mode === "request" || mode === "prepare" || mode === "probe" ? mode : "response";
     cfg.latitude = Number(cfg.latitude);
     cfg.longitude = Number(cfg.longitude);
     cfg.horizontalAccuracy = Math.trunc(Number(cfg.horizontalAccuracy));
@@ -829,6 +829,58 @@
     $done({});
   }
 
+  function valueType(value) {
+    if (value == null) {
+      return String(value);
+    }
+    if (value instanceof Uint8Array) {
+      return "Uint8Array";
+    }
+    if (typeof ArrayBuffer !== "undefined" && value instanceof ArrayBuffer) {
+      return "ArrayBuffer";
+    }
+    return typeof value;
+  }
+
+  function valueLength(value) {
+    if (value == null) {
+      return 0;
+    }
+    if (typeof value === "string" || typeof value.length === "number") {
+      return value.length;
+    }
+    if (typeof ArrayBuffer !== "undefined" && value instanceof ArrayBuffer) {
+      return value.byteLength;
+    }
+    return 0;
+  }
+
+  function objectKeys(value) {
+    if (!value || typeof value !== "object") {
+      return "";
+    }
+    var keys = [];
+    for (var key in value) {
+      if (Object.prototype.hasOwnProperty.call(value, key)) {
+        keys.push(key);
+      }
+    }
+    return keys.join(",");
+  }
+
+  function doneResponseProbe(config) {
+    var response = typeof $response !== "undefined" ? $response : {};
+    var headers = response.headers || {};
+    if (config.debug) {
+      console.log("Location spoofer probe response keys: " + objectKeys(response));
+      console.log("Location spoofer probe headers: status=" + (response.status || response.statusCode || "<none>") + ", content-length=" + (headerValue(headers, "Content-Length") || "<none>") + ", content-type=" + (headerValue(headers, "Content-Type") || "<none>") + ", content-encoding=" + (headerValue(headers, "Content-Encoding") || "none"));
+      console.log("Location spoofer probe body slots: body=" + valueType(response.body) + "/" + valueLength(response.body) + ", bodyBytes=" + valueType(response.bodyBytes) + "/" + valueLength(response.bodyBytes) + ", rawBody=" + valueType(response.rawBody) + "/" + valueLength(response.rawBody) + ", binaryBody=" + valueType(response.binaryBody) + "/" + valueLength(response.binaryBody));
+      var bytes = messageBodyToBytes(response);
+      console.log("Location spoofer probe selected body: " + (bytes ? bytes.length : 0) + " bytes, head=" + (bytes ? hexPreview(bytes, 32) : "<none>"));
+    }
+    donePassThrough();
+  }
+
   function doneSyntheticResponse(bytes, info) {
     var headers = headersWithBinaryBody({}, bytes.length);
     if (info && info.debug) {
@@ -876,6 +928,10 @@
         }
 
         if (hasResponse) {
+          if (config.mode === "probe") {
+            doneResponseProbe(config);
+            return;
+          }
           if (config.mode !== "response") {
             donePassThrough();
             return;
