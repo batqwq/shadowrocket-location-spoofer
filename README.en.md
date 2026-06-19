@@ -24,7 +24,7 @@ timezone: America/Los_Angeles
 Import the main module in Shadowrocket:
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response2
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response3
 ```
 
 Then:

@@ -185,6 +185,38 @@ function testResponseRewritePath() {
   assertPatchedPayload(extraction.payload, config);
 }
 
+function testAlternatePrefixedResponsePath() {
+  const config = {
+    mode: "response",
+    latitude: 37.3349,
+    longitude: -122.00902,
+    horizontalAccuracy: 39,
+    verticalAccuracy: 1000,
+    altitude: 530,
+    unknownValue4: 3,
+    motionActivityType: 63,
+    motionActivityConfidence: 467
+  };
+  const prefix = new Uint8Array([0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00]);
+  const originalResponse = spoofer.buildAppleWLocResponse(makeFixturePayload(), prefix);
+  const extracted = spoofer.extractAppleWLocPayload(originalResponse);
+  assert.strictEqual(extracted.kind, "synthetic");
+  assert.deepStrictEqual(Array.from(extracted.prefix), Array.from(prefix));
+
+  const result = spoofer.spoofAppleResponse(originalResponse, config);
+  assert.strictEqual(result.kind, "synthetic");
+  assert.strictEqual(result.prefix, "0001000000030000");
+  assert.deepStrictEqual(Array.from(result.response.slice(0, 8)), Array.from(prefix));
+
+  const reExtracted = spoofer.extractAppleWLocPayload(result.response);
+  assertPatchedPayload(reExtracted.payload, config);
+  assert.strictEqual(
+    spoofer.patchedPayloadSummary(reExtracted.payload),
+    "firstWifi=37.33490000,-122.00902000",
+    "alternate prefix patched wifi summary"
+  );
+}
+
 function testCellTowerResponseRewritePath() {
   const config = {
     mode: "response",
@@ -463,6 +495,7 @@ function testMarkerWriteBack() {
 // Run all tests.
 testArpcRequestPath();
 testResponseRewritePath();
+testAlternatePrefixedResponsePath();
 testCellTowerResponseRewritePath();
 testRealResponseExtraction();
 testBarePayloadExtraction();

@@ -559,8 +559,38 @@
     ]);
   }
 
-  function buildAppleWLocResponse(payload) {
-    return concatBytes([APPLE_WLOC_PREFIX, writeUInt16BE(payload.length), payload]);
+  function buildAppleWLocResponse(payload, prefix) {
+    return concatBytes([prefix || APPLE_WLOC_PREFIX, writeUInt16BE(payload.length), payload]);
+  }
+
+  function extractPrefixedAppleWLocPayload(responseBytes) {
+    if (!responseBytes || responseBytes.length < 10) {
+      return null;
+    }
+    if (responseBytes[0] !== 0x00 || responseBytes[1] !== 0x01) {
+      return null;
+    }
+    if (responseBytes[6] !== 0x00 || responseBytes[7] !== 0x00) {
+      return null;
+    }
+
+    var payloadLength = readUInt16BE(responseBytes, 8);
+    var payloadOffset = 10;
+    if (payloadLength <= 0 || payloadOffset + payloadLength > responseBytes.length) {
+      return null;
+    }
+
+    var payload = responseBytes.slice(payloadOffset, payloadOffset + payloadLength);
+    if (tryParseFields(payload) === null) {
+      return null;
+    }
+
+    return {
+      kind: "synthetic",
+      payload: payload,
+      prefix: responseBytes.slice(0, 8),
+      suffix: responseBytes.slice(payloadOffset + payloadLength)
+    };
   }
 
   // Extract the AppleWLoc protobuf payload from a /clls/wloc response body.
@@ -579,20 +609,11 @@
       throw new Error("Apple WLoc response too short");
     }
 
-    // Shape 1: spoofed synthetic response.
-    if (bytesEqualPrefix(responseBytes, APPLE_WLOC_PREFIX)) {
-      if (responseBytes.length < APPLE_WLOC_PREFIX.length + 2) {
-        throw new Error("Apple WLoc synthetic response truncated");
-      }
-      var synPayloadOffset = APPLE_WLOC_PREFIX.length + 2;
-      var synPayloadLength = readUInt16BE(responseBytes, APPLE_WLOC_PREFIX.length);
-      if (synPayloadOffset + synPayloadLength > responseBytes.length) {
-        throw new Error("Apple WLoc payload length exceeds buffer");
-      }
-      return {
-        kind: "synthetic",
-        payload: responseBytes.slice(synPayloadOffset, synPayloadOffset + synPayloadLength)
-      };
+    // Shape 1: prefixed WLoc response. The original Go implementation emits
+    // 0001000000010000, while Apple's live responses may use 0001000000030000.
+    var prefixed = extractPrefixedAppleWLocPayload(responseBytes);
+    if (prefixed) {
+      return prefixed;
     }
 
     // Shape 2: ARPC envelope – try the proper structured parser first.
@@ -699,7 +720,7 @@
       ]);
     } else {
       // synthetic / bare – use the simple prefix format.
-      response = buildAppleWLocResponse(patched.payload);
+      response = buildAppleWLocResponse(patched.payload, extraction.prefix);
     }
 
     return {
@@ -707,7 +728,8 @@
       payload: patched.payload,
       wifiCount: patched.wifiCount,
       cellCount: patched.cellCount,
-      kind: extraction.kind
+      kind: extraction.kind,
+      prefix: extraction.prefix ? hexPreview(extraction.prefix, 8) : ""
     };
   }
 
@@ -1037,7 +1059,7 @@
           }
           var responseResult = spoofAppleResponse(responseBody, config);
           if (config.debug) {
-            console.log("Location spoofer patched " + responseResult.wifiCount + " wifi devices, " + responseResult.cellCount + " cell towers, kind=" + responseResult.kind + ", response=" + responseResult.response.length + " bytes");
+            console.log("Location spoofer patched " + responseResult.wifiCount + " wifi devices, " + responseResult.cellCount + " cell towers, kind=" + responseResult.kind + ", prefix=" + (responseResult.prefix || "<none>") + ", response=" + responseResult.response.length + " bytes");
             console.log("Location spoofer patched locations: " + patchedPayloadSummary(responseResult.payload));
           }
           doneRewriteResponse(responseResult.response, {

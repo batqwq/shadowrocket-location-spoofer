@@ -6,7 +6,7 @@
 [Script]
 # Default path: leave the Apple request untouched, then rewrite Apple's real
 # binary response body. This avoids Shadowrocket's request-body timing issue.
-iOS Location Spoofer Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-cell-response2,argument=mode=response&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
+iOS Location Spoofer Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-cell-response3,argument=mode=response&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
 
 [MITM]
 hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com
