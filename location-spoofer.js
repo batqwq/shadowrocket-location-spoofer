@@ -396,7 +396,7 @@
 
     cfg.enabled = cfg.enabled !== false;
     var mode = String(cfg.mode || "response").toLowerCase();
-    cfg.mode = mode === "request" || mode === "prepare" || mode === "probe" ? mode : "response";
+    cfg.mode = mode === "request" || mode === "prepare" || mode === "probe" || mode === "inspect" ? mode : "response";
     cfg.latitude = Number(cfg.latitude);
     cfg.longitude = Number(cfg.longitude);
     cfg.horizontalAccuracy = Math.trunc(Number(cfg.horizontalAccuracy));
@@ -968,6 +968,100 @@
     return keys.join(",");
   }
 
+  function fieldHistogram(fields) {
+    var counts = {};
+    var order = [];
+    for (var i = 0; i < fields.length; i += 1) {
+      var key = String(fields[i].fieldNumber) + "/" + String(fields[i].wireType);
+      if (!counts[key]) {
+        counts[key] = 0;
+        order.push(key);
+      }
+      counts[key] += 1;
+    }
+    var parts = [];
+    for (var j = 0; j < order.length; j += 1) {
+      parts.push(order[j] + "x" + counts[order[j]]);
+    }
+    return parts.join(",");
+  }
+
+  function countFields(fields, fieldNumber) {
+    var count = 0;
+    for (var i = 0; i < fields.length; i += 1) {
+      if (fields[i].fieldNumber === fieldNumber) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  function appleWLocPayloadInspect(payload) {
+    try {
+      var fields = parseFields(payload);
+      var parts = [
+        "payloadLen=" + payload.length,
+        "fields=" + fieldHistogram(fields),
+        "wifi=" + countFields(fields, 2),
+        "cellResp=" + countFields(fields, 22),
+        "cellReq=" + countFields(fields, 25),
+        "hasCounts=" + (countFields(fields, 3) + "/" + countFields(fields, 4)),
+        "deviceType=" + countFields(fields, 33),
+        patchedPayloadSummary(payload)
+      ];
+      return parts.join(", ");
+    } catch (err) {
+      return "payload parse failed: " + err.message;
+    }
+  }
+
+  function inspectResponseBytes(bytes) {
+    if (!bytes) {
+      console.log("Location spoofer inspect response body unavailable");
+      return;
+    }
+    console.log("Location spoofer inspect response body: len=" + bytes.length + ", head=" + hexPreview(bytes, 48));
+    try {
+      var extraction = extractAppleWLocPayload(bytes);
+      console.log("Location spoofer inspect response extraction: kind=" + extraction.kind + ", prefix=" + (extraction.prefix ? hexPreview(extraction.prefix, 8) : "<none>") + ", payloadLen=" + extraction.payload.length + ", suffixLen=" + (extraction.suffix ? extraction.suffix.length : 0));
+      console.log("Location spoofer inspect response payload: " + appleWLocPayloadInspect(extraction.payload));
+    } catch (err) {
+      console.log("Location spoofer inspect response extraction failed: " + err.message);
+      var directFields = tryParseFields(bytes);
+      if (directFields) {
+        console.log("Location spoofer inspect response direct fields: " + fieldHistogram(directFields));
+      }
+    }
+  }
+
+  function inspectRequestBytes(bytes) {
+    if (!bytes) {
+      console.log("Location spoofer inspect request body unavailable");
+      return;
+    }
+    console.log("Location spoofer inspect request body: len=" + bytes.length + ", head=" + hexPreview(bytes, 48));
+    try {
+      var arpc = parseArpc(bytes);
+      console.log("Location spoofer inspect request arpc: version=" + arpc.version + ", functionId=" + arpc.functionId + ", locale=" + arpc.locale + ", app=" + arpc.appIdentifier + ", os=" + arpc.osVersion + ", payloadLen=" + arpc.payload.length);
+      console.log("Location spoofer inspect request payload: " + appleWLocPayloadInspect(arpc.payload));
+    } catch (err) {
+      console.log("Location spoofer inspect request arpc failed: " + err.message);
+      var directFields = tryParseFields(bytes);
+      if (directFields) {
+        console.log("Location spoofer inspect request direct fields: " + fieldHistogram(directFields));
+      }
+    }
+  }
+
+  function doneInspect(config, hasResponse) {
+    if (hasResponse) {
+      inspectResponseBytes(messageBodyToBytes($response));
+    } else {
+      inspectRequestBytes(messageBodyToBytes($request));
+    }
+    donePassThrough();
+  }
+
   function doneResponseProbe(config) {
     var response = typeof $response !== "undefined" ? $response : {};
     var headers = response.headers || {};
@@ -1025,6 +1119,11 @@
 
         if (!hasResponse && config.mode === "prepare") {
           donePreparedRequestPassThrough();
+          return;
+        }
+
+        if (config.mode === "inspect") {
+          doneInspect(config, hasResponse);
           return;
         }
 

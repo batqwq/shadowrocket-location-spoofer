@@ -75,6 +75,8 @@ service and can be MITM-decrypted by Shadowrocket.
   module.
 - `ios-location-spoofer-request-only.sgmodule`: request-synthesis diagnostic
   module.
+- `ios-location-spoofer-inspect.sgmodule`: structured request/response
+  diagnostic module.
 - `test-location-spoofer.js`: local Node.js test harness.
 - `NOTICE.md`: derivative-work notice, upstream credits, and licensing notes.
 - `LICENSE`: AGPL-3.0 license text.
@@ -117,6 +119,16 @@ Request-synthesis diagnostic:
 ```text
 https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-cell-request1
 ```
+
+Structured inspect diagnostic:
+
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-inspect.sgmodule?v=20260619-inspect1
+```
+
+The `inspect` module does not modify traffic. It logs ARPC/protobuf summaries
+without dumping the full raw body, so BSSID and cellular tower data are not
+written wholesale into logs.
 
 When the module works, Shadowrocket logs should include something like:
 
