@@ -10,7 +10,7 @@
 
   var DEFAULT_CONFIG = {
     enabled: true,
-    mode: "request",
+    mode: "response",
     latitude: 37.3349,
     longitude: -122.00902,
     horizontalAccuracy: 39,
@@ -779,10 +779,7 @@
   function donePreparedRequestPassThrough() {
     var headers = prepareRequestHeaders((typeof $request !== "undefined" && $request.headers) || {});
     $done({
-      headers: headers,
-      request: {
-        headers: headers
-      }
+      headers: headers
     });
   }
 
@@ -926,14 +923,14 @@
           if (config.debug) {
             console.log("Location spoofer request body unavailable");
           }
-          donePreparedRequestPassThrough();
+          donePassThrough();
           return;
         }
         if (requestBody.length < 2) {
           if (config.debug) {
             console.log("Location spoofer request body too short: " + requestBody.length + " bytes, head=" + hexPreview(requestBody));
           }
-          donePreparedRequestPassThrough();
+          donePassThrough();
           return;
         }
         var requestResult = spoofArpcRequest(requestBody, config);
@@ -950,11 +947,7 @@
           console.log("Location spoofer failed: " + err.message + " | bodyLen=" + (diagBody ? diagBody.length : 0) + " head=" + (diagBody ? hexPreview(diagBody, 32) : "<none>"));
         }
         if (config.failOpen !== false) {
-          if (hasRequest && !hasResponse) {
-            donePreparedRequestPassThrough();
-          } else {
-            donePassThrough();
-          }
+          donePassThrough();
           return;
         }
         $done({

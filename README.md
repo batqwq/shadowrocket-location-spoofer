@@ -22,14 +22,13 @@ the ARPC/protobuf patching logic in JavaScript.
 3. Import this URL in Shadowrocket:
    `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule`
    For diagnostics, import the request-only module instead:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-req-only`
+   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-req-only2`
 4. Install and fully trust Shadowrocket's MITM certificate in iOS Settings.
 5. Enable the module, start Shadowrocket, then toggle iOS Location Services off
    and on before testing Maps.
 
 The published module passes the Apple Park coordinate inline through the script
-argument. It uses a request-body hook to synthesize the Apple WLoc response, then
-falls back to response-body rewriting if Shadowrocket cannot expose the request
+argument. It leaves the Apple request untouched and rewrites the binary response
 body. `location-spoofer-config.json` is kept as an editable reference and for
 users who want to host a remote config URL themselves.
 
@@ -40,7 +39,7 @@ The default coordinate is Apple Park in Cupertino, California.
 ```json
 {
   "enabled": true,
-  "mode": "request",
+  "mode": "response",
   "latitude": 37.3349,
   "longitude": -122.00902,
   "horizontalAccuracy": 39,
@@ -54,16 +53,17 @@ The default coordinate is Apple Park in Cupertino, California.
 }
 ```
 
-`mode: "request"` is the default in the published module. It matches the original
-Go implementation: read the ARPC request, patch the AppleWLoc protobuf, and
-return a synthetic binary response. If Shadowrocket cannot expose the request
-body, the script forwards the request with `Accept-Encoding: identity` and the
-response hook attempts to patch Apple's response.
+The published module uses `mode: "response"` because current Shadowrocket logs
+show that the `http-request` hook can run before the binary POST body is exposed.
+Request synthesis remains available in
+`ios-location-spoofer-request-only.sgmodule` for diagnostics. If that module logs
+`Location spoofer request mode body length: 0`, your Shadowrocket build is not
+exposing the `/clls/wloc` request body to scripts.
 
-If the log says the request body is too short or unavailable, or if it only
-shows `Location spoofer response body too short: 0 bytes`, disable `HTTP/2
-MitM` in Shadowrocket's HTTPS decryption settings and retry with the
-request-only module.
+If the response-only module logs `Location spoofer response body too short: 0
+bytes`, Shadowrocket is also not exposing the Apple response body. In that case a
+pure Shadowrocket module cannot complete the original MITM technique on that
+build; use the original PacketTunnel/local proxy approach instead.
 
 ## What It Spoofs
 
