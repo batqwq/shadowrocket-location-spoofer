@@ -1,15 +1,18 @@
 #!name=iOS Location Spoofer
-#!desc=Shadowrocket module port of acheong08/ios-location-spoofer. Spoofs Apple Wi-Fi location by patching /clls/wloc.
+#!desc=Shadowrocket module port of acheong08/ios-location-spoofer. Spoofs Apple Wi-Fi location responses by rewriting the binary /clls/wloc response.
 #!author=Codex port, original research/code by acheong08
 #!homepage=https://github.com/acheong08/ios-location-spoofer
 
 [Script]
-# Primary path: synthesize the Apple location response directly from the
-# intercepted ARPC request, matching the original Go implementation.
-iOS Location Spoofer Request = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=true,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=request&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
+# Prepare path: force the Apple location response to be uncompressed so the
+# response script can patch the binary AppleWLoc payload deterministically.
+iOS Location Spoofer Prepare = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=prepare&debug=true
 
-# Fallback path: if the request hook cannot read the POST body, rewrite Apple's
-# real response body when Shadowrocket exposes it.
+# Primary path: rewrite Apple's real /clls/wloc response. The response body
+# carries the same ARPC framing as the request, so the script uses parseArpc()
+# to extract the AppleWLoc protobuf payload, patches all wifi device locations,
+# then writes back in the original ARPC format.
+# Default coordinates point to Apple Park (Cupertino). Override via argument.
 iOS Location Spoofer Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=true,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=response&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
 
 [MITM]

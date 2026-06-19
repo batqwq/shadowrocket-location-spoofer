@@ -75,16 +75,13 @@
     return true;
   }
 
-  // Search for a byte sequence within bytes; returns last index or -1.
-  // The Apple /clls/wloc response wraps the AppleWLoc protobuf in a variable-length
-  // ARPC framing header (locale/identifier/osVersion pascal strings). The header is
-  // followed by a stable marker (00 00 00 01 00 00) + uint16 BE length + payload.
-  // See zadewg/GS-LOC client.py and Mika Tuupola's reverse-engineering write-up.
+  // Search for a byte sequence within bytes; returns first index or -1.
+  // Searches forward to prefer the earliest (most likely correct) match.
   function findBytes(bytes, marker) {
     if (!bytes || !marker || marker.length === 0) {
       return -1;
     }
-    for (var i = bytes.length - marker.length; i >= 0; i -= 1) {
+    for (var i = 0; i <= bytes.length - marker.length; i += 1) {
       var ok = true;
       for (var j = 0; j < marker.length; j += 1) {
         if (bytes[i + j] !== marker[j]) {
@@ -97,6 +94,19 @@
       }
     }
     return -1;
+  }
+
+  // Try to parse bytes as protobuf fields. Returns fields array or null on failure.
+  function tryParseFields(bytes) {
+    try {
+      if (!bytes || bytes.length === 0) {
+        return null;
+      }
+      var fields = parseFields(bytes);
+      return fields.length > 0 ? fields : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function binaryStringToBytes(value) {
@@ -478,11 +488,16 @@
   }
 
   // Extract the AppleWLoc protobuf payload from a /clls/wloc response body.
-  // Accepts three shapes:
-  //   1. A spoofed (synthetic) response carrying APPLE_WLOC_PREFIX (8 bytes) + uint16 len.
-  //   2. A real Apple response whose variable-length ARPC header is followed by
-  //      APPLE_WLOC_MARKER (6 bytes) + uint16 len + payload.
-  //   3. A bare protobuf payload (field tag 0x12 = wifi device, wire type 2).
+  // Returns a typed result: { kind, payload, ... } so the caller can write back
+  // in the correct format.
+  //
+  // Supported shapes:
+  //   "arpc"      – Full ARPC envelope (same format as requests). The real Apple
+  //                 response uses this. Contains arpc metadata for write-back.
+  //   "synthetic" – Our own spoofed response: APPLE_WLOC_PREFIX (8 bytes) + uint16 len.
+  //   "marker"    – Fallback: marker search 00 00 00 01 00 00 + uint16 len.
+  //                 Keeps the prefix/suffix bytes for write-back.
+  //   "bare"      – Bare protobuf payload (field tag 0x12 = wifi device, wire type 2).
   function extractAppleWLocPayload(responseBytes) {
     if (!responseBytes || responseBytes.length < 2) {
       throw new Error("Apple WLoc response too short");
@@ -493,15 +508,34 @@
       if (responseBytes.length < APPLE_WLOC_PREFIX.length + 2) {
         throw new Error("Apple WLoc synthetic response truncated");
       }
-      var payloadOffset = APPLE_WLOC_PREFIX.length + 2;
-      var payloadLength = readUInt16BE(responseBytes, APPLE_WLOC_PREFIX.length);
-      if (payloadOffset + payloadLength > responseBytes.length) {
+      var synPayloadOffset = APPLE_WLOC_PREFIX.length + 2;
+      var synPayloadLength = readUInt16BE(responseBytes, APPLE_WLOC_PREFIX.length);
+      if (synPayloadOffset + synPayloadLength > responseBytes.length) {
         throw new Error("Apple WLoc payload length exceeds buffer");
       }
-      return responseBytes.slice(payloadOffset, payloadOffset + payloadLength);
+      return {
+        kind: "synthetic",
+        payload: responseBytes.slice(synPayloadOffset, synPayloadOffset + synPayloadLength)
+      };
     }
 
-    // Shape 2: real Apple response with marker.
+    // Shape 2: ARPC envelope – try the proper structured parser first.
+    // The Apple /clls/wloc response uses the same ARPC framing as the request.
+    try {
+      var arpc = parseArpc(responseBytes);
+      if (arpc.payload.length > 0 && tryParseFields(arpc.payload) !== null) {
+        return {
+          kind: "arpc",
+          payload: arpc.payload,
+          arpc: arpc
+        };
+      }
+    } catch (e) {
+      // ARPC parse failed – continue with fallback strategies.
+    }
+
+    // Shape 3: marker search fallback. The ARPC functionId (00 00 00 01) may be
+    // followed by uint16/uint32 payload length. Try to find and validate.
     var markerIdx = findBytes(responseBytes, APPLE_WLOC_MARKER);
     if (markerIdx >= 0) {
       var lenOffset = markerIdx + APPLE_WLOC_MARKER.length;
@@ -509,14 +543,27 @@
         var realLen = readUInt16BE(responseBytes, lenOffset);
         var realPayloadOffset = lenOffset + 2;
         if (realLen > 0 && realPayloadOffset + realLen <= responseBytes.length) {
-          return responseBytes.slice(realPayloadOffset, realPayloadOffset + realLen);
+          var candidatePayload = responseBytes.slice(realPayloadOffset, realPayloadOffset + realLen);
+          // Only accept if the candidate parses as valid protobuf.
+          if (tryParseFields(candidatePayload) !== null) {
+            return {
+              kind: "marker",
+              payload: candidatePayload,
+              prefix: responseBytes.slice(0, markerIdx),
+              markerAndLen: responseBytes.slice(markerIdx, realPayloadOffset),
+              suffix: responseBytes.slice(realPayloadOffset + realLen)
+            };
+          }
         }
       }
     }
 
-    // Shape 3: bare protobuf payload (best effort).
+    // Shape 4: bare protobuf payload (best effort).
     if (looksLikeAppleWLocPayload(responseBytes)) {
-      return responseBytes;
+      return {
+        kind: "bare",
+        payload: responseBytes
+      };
     }
 
     throw new Error("missing Apple WLoc response prefix");
@@ -548,12 +595,41 @@
 
   function spoofAppleResponse(responseBytes, configInput) {
     var config = normalizeConfig(configInput);
-    var payload = extractAppleWLocPayload(responseBytes);
-    var patched = patchAppleWLocPayload(payload, config);
+    var extraction = extractAppleWLocPayload(responseBytes);
+    var patched = patchAppleWLocPayload(extraction.payload, config);
+    var response;
+
+    if (extraction.kind === "arpc") {
+      // Write back in ARPC format, preserving the original envelope metadata.
+      var arpcOut = {
+        version: extraction.arpc.version,
+        locale: extraction.arpc.locale,
+        appIdentifier: extraction.arpc.appIdentifier,
+        osVersion: extraction.arpc.osVersion,
+        functionId: extraction.arpc.functionId,
+        payload: patched.payload
+      };
+      response = serializeArpc(arpcOut);
+    } else if (extraction.kind === "marker") {
+      // Rebuild: original prefix + marker bytes + new uint16 len + patched payload + suffix.
+      var newLenBytes = writeUInt16BE(patched.payload.length);
+      response = concatBytes([
+        extraction.prefix,
+        extraction.markerAndLen.slice(0, APPLE_WLOC_MARKER.length),
+        newLenBytes,
+        patched.payload,
+        extraction.suffix
+      ]);
+    } else {
+      // synthetic / bare – use the simple prefix format.
+      response = buildAppleWLocResponse(patched.payload);
+    }
+
     return {
-      response: buildAppleWLocResponse(patched.payload),
+      response: response,
       payload: patched.payload,
-      wifiCount: patched.wifiCount
+      wifiCount: patched.wifiCount,
+      kind: extraction.kind
     };
   }
 
@@ -821,7 +897,13 @@
             donePassThrough();
             return;
           }
+          if (config.debug) {
+            console.log("Location spoofer response body: " + responseBody.length + " bytes, head=" + hexPreview(responseBody, 32));
+          }
           var responseResult = spoofAppleResponse(responseBody, config);
+          if (config.debug) {
+            console.log("Location spoofer patched " + responseResult.wifiCount + " wifi devices, kind=" + responseResult.kind + ", response=" + responseResult.response.length + " bytes");
+          }
           doneRewriteResponse(responseResult.response, {
             wifiCount: responseResult.wifiCount,
             debug: config.debug
@@ -855,7 +937,8 @@
         });
       } catch (err) {
         if (config.debug) {
-          console.log("Location spoofer failed: " + err.message);
+          var diagBody = hasResponse ? messageBodyToBytes($response) : messageBodyToBytes($request);
+          console.log("Location spoofer failed: " + err.message + " | bodyLen=" + (diagBody ? diagBody.length : 0) + " head=" + (diagBody ? hexPreview(diagBody, 32) : "<none>"));
         }
         if (config.failOpen !== false) {
           if (hasRequest && !hasResponse) {
@@ -879,18 +962,22 @@
   var api = {
     DEFAULT_CONFIG: DEFAULT_CONFIG,
     APPLE_WLOC_PREFIX: APPLE_WLOC_PREFIX,
+    APPLE_WLOC_MARKER: APPLE_WLOC_MARKER,
     bodyToBytes: bodyToBytes,
     messageBodyToBytes: messageBodyToBytes,
     hexPreview: hexPreview,
     bytesToBinaryString: bytesToBinaryString,
     binaryStringToBytes: binaryStringToBytes,
     concatBytes: concatBytes,
+    readUInt16BE: readUInt16BE,
+    writeUInt16BE: writeUInt16BE,
     encodeVarintUnsigned: encodeVarintUnsigned,
     encodeVarintSignedInt64: encodeVarintSignedInt64,
     decodeVarint: decodeVarint,
     makeVarintField: makeVarintField,
     makeLengthDelimitedField: makeLengthDelimitedField,
     parseFields: parseFields,
+    tryParseFields: tryParseFields,
     coordToInt: coordToInt,
     normalizeConfig: normalizeConfig,
     patchLocation: patchLocation,
