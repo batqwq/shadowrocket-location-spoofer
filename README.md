@@ -57,6 +57,10 @@ The published module enables both paths: the request script tries to synthesize
 the location response first, and the response script rewrites Apple's binary
 response if the request path passes through.
 
+If the log says the request body is `0 bytes`, disable `HTTP/2 MitM` in
+Shadowrocket's HTTPS decryption settings and retry. Some Shadowrocket builds run
+the HTTP/2 request script before the binary request body is available.
+
 ## What It Spoofs
 
 The module targets:

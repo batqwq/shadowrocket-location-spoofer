@@ -86,6 +86,18 @@
     return chunks.join("");
   }
 
+  function hexPreview(bytes, limit) {
+    if (!bytes) {
+      return "<none>";
+    }
+    var out = [];
+    var max = Math.min(bytes.length, limit || 16);
+    for (var i = 0; i < max; i += 1) {
+      out.push(("0" + bytes[i].toString(16)).slice(-2));
+    }
+    return out.join("");
+  }
+
   function bodyToBytes(body) {
     if (body == null) {
       return null;
@@ -648,6 +660,13 @@
             donePassThrough();
             return;
           }
+          if (responseBody.length < APPLE_WLOC_PREFIX.length + 2) {
+            if (config.debug) {
+              console.log("Location spoofer response body too short: " + responseBody.length + " bytes, head=" + hexPreview(responseBody));
+            }
+            donePassThrough();
+            return;
+          }
           var responseResult = spoofAppleResponse(responseBody, config);
           doneRewriteResponse(responseResult.response, {
             wifiCount: responseResult.wifiCount,
@@ -664,6 +683,13 @@
         if (!requestBody) {
           if (config.debug) {
             console.log("Location spoofer request body unavailable");
+          }
+          donePassThrough();
+          return;
+        }
+        if (requestBody.length < 2) {
+          if (config.debug) {
+            console.log("Location spoofer request body too short: " + requestBody.length + " bytes, head=" + hexPreview(requestBody));
           }
           donePassThrough();
           return;
@@ -697,6 +723,7 @@
     APPLE_WLOC_PREFIX: APPLE_WLOC_PREFIX,
     bodyToBytes: bodyToBytes,
     messageBodyToBytes: messageBodyToBytes,
+    hexPreview: hexPreview,
     bytesToBinaryString: bytesToBinaryString,
     binaryStringToBytes: binaryStringToBytes,
     concatBytes: concatBytes,
