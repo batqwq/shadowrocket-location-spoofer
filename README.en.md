@@ -1,15 +1,16 @@
 # iOS Location Spoofer for Shadowrocket
 
-[Chinese README](./README.md)
+[中文说明](./README.md)
 
-This project ports the core behavior of
-[acheong08/ios-location-spoofer](https://github.com/acheong08/ios-location-spoofer)
-to a Shadowrocket module.
+This is a Shadowrocket module port derived from
+[acheong08/ios-location-spoofer](https://github.com/acheong08/ios-location-spoofer).
 
-The original project uses an iOS PacketTunnel extension and a local Go MITM
-proxy. This repository lets Shadowrocket provide the VPN, HTTPS decryption, and
-script runtime while `location-spoofer.js` reimplements the ARPC/protobuf
-patching logic in JavaScript.
+The upstream project uses an iOS PacketTunnel extension plus a local Go MITM
+proxy to intercept Apple's `/clls/wloc` location service and rewrite Wi-Fi or
+cellular location results. This repository keeps that core behavior, but moves
+the runtime to Shadowrocket: Shadowrocket provides VPN, HTTPS decryption, and
+script execution, while `location-spoofer.js` handles ARPC/protobuf parsing and
+response patching.
 
 The default location is Apple Park in Cupertino, California:
 
@@ -24,25 +25,41 @@ timezone: America/Los_Angeles
 Import the main module in Shadowrocket:
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response3
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260620-stable1
 ```
 
 Then:
 
-1. Enable HTTPS decryption in Shadowrocket.
+1. Enable `HTTPS Decryption` in Shadowrocket.
 2. Install and fully trust Shadowrocket's MITM certificate in iOS Settings.
-3. Enable only the `iOS Location Spoofer` main module. Do not enable the probe
-   module at the same time.
+3. Enable only the `iOS Location Spoofer` main module. Do not enable inspect,
+   raw-dump, or probe modules at the same time.
 4. Disconnect and reconnect Shadowrocket.
 5. Turn iOS Location Services off, wait a few seconds, then turn them on again.
-6. Test in Apple Maps or another app that uses iOS system location.
+6. Test with Apple Maps, Weather, or another app that uses iOS system location.
 
-The module enables MITM for:
+The module automatically appends MITM hostnames:
 
 ```text
 gs-loc.apple.com
 gs-loc-cn.apple.com
 ```
+
+## Current Status
+
+Verified in Shadowrocket PacketTunnel logs:
+
+- The module can read and patch `/clls/wloc` binary responses under HTTP/2 MITM.
+- Wi-Fi location responses can be rewritten to Apple Park.
+- Cellular `cell_tower_response` results can be rewritten to Apple Park.
+- A real cellular test patched `121 cell towers`, with the first cellular result
+  set to `37.33490000,-122.00902000`.
+
+This module does not hook CoreLocation and does not modify real GNSS/GPS
+hardware data. It only affects location flows that pass through Apple's
+`/clls/wloc` service and can be decrypted by Shadowrocket. Strong GPS fixes,
+app-specific location SDKs, or location paths that do not use this Apple
+endpoint may not be affected.
 
 ## How It Works
 
@@ -60,32 +77,29 @@ It patches location fields inside the AppleWLoc protobuf response:
 - Horizontal accuracy, vertical accuracy, altitude, motion type, and confidence
   are patched as well
 - `num_cell_results`, `num_wifi_results`, and `device_type` are removed to match
-  the original implementation
-
-This module does not hook CoreLocation and does not modify real GNSS/GPS
-hardware data. It only affects location flows that use Apple's `/clls/wloc`
-service and can be MITM-decrypted by Shadowrocket.
+  upstream behavior
 
 ## Files
 
 - `ios-location-spoofer.sgmodule`: default Shadowrocket module.
 - `location-spoofer.js`: Shadowrocket script with ARPC/protobuf patching.
-- `location-spoofer-config.json`: default config example.
-- `ios-location-spoofer-response-probe.sgmodule`: response-body diagnostic
-  module.
+- `location-spoofer-config.json`: remote config example.
+- `ios-location-spoofer-inspect.sgmodule`: structured request/response
+  diagnostic module, pass-through only.
+- `ios-location-spoofer-raw-dump.sgmodule`: full raw body base64 diagnostic
+  module, pass-through only.
+- `ios-location-spoofer-response-probe.sgmodule`: response-body probe module.
 - `ios-location-spoofer-request-only.sgmodule`: request-synthesis diagnostic
   module.
-- `ios-location-spoofer-inspect.sgmodule`: structured request/response
-  diagnostic module.
-- `ios-location-spoofer-raw-dump.sgmodule`: full raw body base64 diagnostic
-  module.
 - `test-location-spoofer.js`: local Node.js test harness.
+- `CONTRIBUTING.md`: contribution and bug report notes.
+- `SECURITY.md`: privacy and security notes for diagnostic logs.
 - `NOTICE.md`: derivative-work notice, upstream credits, and licensing notes.
 - `LICENSE`: AGPL-3.0 license text.
 
 ## Config
 
-Default config:
+Default config example:
 
 ```json
 {
@@ -104,11 +118,32 @@ Default config:
 }
 ```
 
-The published module passes the Apple Park coordinate inline through the script
-argument. `location-spoofer-config.json` is kept as an editable example for users
-who want to host a remote config themselves.
+The published main module passes the Apple Park coordinate inline through script
+arguments. `location-spoofer-config.json` is kept as an editable example for
+users who want to host their own remote config.
 
 ## Diagnostic Modules
+
+For normal usage, enable only the main module. The following modules are for
+debugging and should not be enabled together with the main module.
+
+Structured inspect:
+
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-inspect.sgmodule?v=20260619-inspect1
+```
+
+`inspect` logs ARPC/protobuf summaries without dumping full raw bodies.
+
+Full raw dump:
+
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-raw-dump.sgmodule?v=20260619-rawdump1
+```
+
+`raw-dump` writes full `/clls/wloc` request and response bodies into logs as
+base64 chunks. It may contain nearby Wi-Fi/BSSID and cellular tower data, so use
+it only temporarily for deep debugging.
 
 Response probe:
 
@@ -122,56 +157,24 @@ Request-synthesis diagnostic:
 https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-cell-request1
 ```
 
-Structured inspect diagnostic:
+## Logs
+
+Debug logging is disabled in the main module by default. To confirm matching,
+temporarily change `debug=false` to `debug=true` in the module argument, or use a
+diagnostic module.
+
+Successful Wi-Fi patch logs look like:
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-inspect.sgmodule?v=20260619-inspect1
+Location spoofer patched 400 wifi devices, 0 cell towers, kind=synthetic
+Location spoofer patched locations: firstWifi=37.33490000,-122.00902000
 ```
 
-The `inspect` module does not modify traffic. It logs ARPC/protobuf summaries
-without dumping the full raw body, so BSSID and cellular tower data are not
-written wholesale into logs.
-
-Full raw dump diagnostic:
+Successful cellular patch logs look like:
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-raw-dump.sgmodule?v=20260619-rawdump1
-```
-
-The `raw-dump` module does not modify traffic, but it writes full `/clls/wloc`
-request and response bodies into logs as base64 chunks. It may contain nearby
-Wi-Fi/BSSID and cellular tower data, so enable it only temporarily for deep
-debugging.
-
-When the module works, Shadowrocket logs should include something like:
-
-```text
-Location spoofer response body: ... bytes
-Location spoofer patched 2 wifi devices, 0 cell towers, kind=synthetic
-```
-
-On LTE/cellular, logs may show:
-
-```text
-Location spoofer patched 0 wifi devices, 100+ cell towers, kind=synthetic
+Location spoofer patched 0 wifi devices, 121 cell towers, kind=synthetic
 Location spoofer patched locations: firstCell=37.33490000,-122.00902000
-```
-
-That is expected. It means cellular tower responses were patched.
-
-## Troubleshooting
-
-If the log shows:
-
-```text
-Location spoofer response body too short: 0 bytes
-```
-
-Shadowrocket is not exposing the binary response body to the script. Confirm
-that the module line contains:
-
-```text
-requires-body=1,binary-body-mode=1,max-size=1048576
 ```
 
 If the log shows:
@@ -184,9 +187,8 @@ Apple's response did not contain usable Wi-Fi or cellular location results in
 that run. Toggle Location Services and test again, or export the PacketTunnel log
 for diagnosis.
 
-HTTP/2 itself is not the issue. The current module has been verified in logs
-where the script matched and read binary response bodies under both HTTP/1.1 and
-HTTP/2.
+HTTP/2 itself is not the issue. The current module has been verified in HTTP/2
+logs with script matching, binary response body reading, and response patching.
 
 ## Test
 
@@ -202,13 +204,14 @@ All location spoofer tests passed.
 
 ## Upstream and License
 
-This is a derivative port of
+This project is a Shadowrocket derivative port of
 [acheong08/ios-location-spoofer](https://github.com/acheong08/ios-location-spoofer).
-The original reverse engineering, Go MITM implementation, and protobuf structure
-come from the upstream project.
+The upstream project provides the original reverse engineering, PacketTunnel +
+Go MITM implementation, AppleWLoc protobuf structure, and `/clls/wloc` patching
+approach.
 
 This repository follows the upstream AGPL-3.0 license. If you redistribute or
-modify this project, keep the upstream attribution, this repository's
-modification notice, `NOTICE.md`, and `LICENSE`.
+modify this project, keep the upstream link, author attribution, this
+repository's modification notice, `NOTICE.md`, and `LICENSE`.
 
 This project is not affiliated with Apple, Shadowrocket, or the upstream author.

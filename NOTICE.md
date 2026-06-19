@@ -3,9 +3,9 @@
 ## 中文
 
 本仓库是 [acheong08/ios-location-spoofer](https://github.com/acheong08/ios-location-spoofer)
-的派生移植项目。
+的 Shadowrocket 派生移植项目。
 
-原项目贡献包括：
+上游项目贡献包括：
 
 - iOS 位置服务与 Apple `/clls/wloc` 流程的逆向研究
 - PacketTunnel 加本地 Go MITM 代理的原始实现
@@ -18,17 +18,19 @@
 - 提供 Shadowrocket `.sgmodule` 模块
 - 使用 `http-response` 路径 patch Apple 真实二进制响应
 - 支持 `binary-body-mode=1`
-- patch Wi-Fi 结果和蜂窝基站 `cell_tower_response` 结果
+- 支持 Wi-Fi 结果和蜂窝 `cell_tower_response` 结果 patch
+- 支持 Apple WLoc 多种响应前缀
+- 提供 inspect、raw-dump、probe 等诊断模块
 - 默认坐标配置为美国 Apple Park
 
-原项目采用 AGPL-3.0 授权。本仓库作为派生作品继续使用 AGPL-3.0。重新分发或修改
-本仓库时，请保留原项目链接、作者署名、本通知文件和 `LICENSE`。
+上游项目采用 AGPL-3.0 授权。本仓库作为派生作品继续使用 AGPL-3.0。重新分发或修改
+本仓库时，请保留上游项目链接、作者署名、本通知文件和 `LICENSE`。
 
-本项目与 Apple、Shadowrocket 或原项目作者没有官方关联。
+本项目与 Apple、Shadowrocket 或上游作者没有官方关联。
 
 ## English
 
-This repository is a derivative port of
+This repository is a Shadowrocket derivative port of
 [acheong08/ios-location-spoofer](https://github.com/acheong08/ios-location-spoofer).
 
 The upstream project provides:
@@ -45,6 +47,8 @@ This repository adds:
 - `http-response` based patching of Apple's real binary response
 - `binary-body-mode=1` support
 - Patching for both Wi-Fi results and cellular `cell_tower_response` results
+- Support for multiple Apple WLoc response prefixes
+- inspect, raw-dump, probe, and other diagnostic modules
 - Apple Park as the default coordinate
 
 The upstream project is licensed under AGPL-3.0. This derivative repository is
