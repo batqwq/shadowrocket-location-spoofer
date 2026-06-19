@@ -1,42 +1,79 @@
 # iOS Location Spoofer for Shadowrocket
 
-This is a pure Shadowrocket module port of the core behavior from
-`acheong08/ios-location-spoofer`.
+[English version](./README.en.md)
 
-The original app runs a PacketTunnel plus a local Go MITM proxy. This port lets
-Shadowrocket provide the VPN and MITM layer, while `location-spoofer.js` ports
-the ARPC/protobuf patching logic in JavaScript.
+这是一个把 [acheong08/ios-location-spoofer](https://github.com/acheong08/ios-location-spoofer)
+核心逻辑移植到 Shadowrocket 模块的项目。
 
-## Files
+原项目使用 iOS PacketTunnel 和本地 Go MITM 代理。这个仓库改为使用
+Shadowrocket 提供 VPN、HTTPS 解密和脚本执行能力，并用
+`location-spoofer.js` 重写 ARPC/protobuf 解析与响应 patch 逻辑。
 
-- `ios-location-spoofer.sgmodule`: Shadowrocket module.
-- `location-spoofer.js`: request/response script.
-- `location-spoofer-config.json`: coordinate and behavior config.
-- `test-location-spoofer.js`: Node.js test harness for the binary codec.
+默认位置是美国 Apple Park：
 
-## Configure
+```text
+latitude: 37.3349
+longitude: -122.00902
+timezone: America/Los_Angeles
+```
 
-1. Edit `location-spoofer-config.json`.
-2. The module is configured for this GitHub Raw location:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/`
-3. Import this URL in Shadowrocket:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule`
-   For diagnostics, import the request-only module instead:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-cell-request1`
-   To inspect the raw response fields exposed by Shadowrocket, import:
-   `https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-response-probe.sgmodule?v=20260619-cell-probe1`
-4. Install and fully trust Shadowrocket's MITM certificate in iOS Settings.
-5. Enable the module, start Shadowrocket, then toggle iOS Location Services off
-   and on before testing Maps.
+## 快速使用
 
-The published module passes the Apple Park coordinate inline through the script
-argument. It leaves the Apple request untouched and rewrites the binary response
-body. `location-spoofer-config.json` is kept as an editable reference and for
-users who want to host a remote config URL themselves.
+在 Shadowrocket 中导入主模块：
 
-## Config
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260619-cell-response1
+```
 
-The default coordinate is Apple Park in Cupertino, California.
+然后按下面步骤配置：
+
+1. 打开 Shadowrocket 的 HTTPS 解密。
+2. 安装并完全信任 Shadowrocket 的 MITM 证书。
+3. 只启用 `iOS Location Spoofer` 主模块，不要同时启用 probe 模块。
+4. 断开并重新连接 Shadowrocket。
+5. 在 iOS 设置中关闭定位服务，等待几秒后再打开。
+6. 打开 Apple 地图或其他使用系统定位的应用测试。
+
+模块会自动对下面两个域名启用 MITM：
+
+```text
+gs-loc.apple.com
+gs-loc-cn.apple.com
+```
+
+## 当前实现
+
+模块拦截 Apple Wi-Fi/蜂窝定位服务接口：
+
+```text
+/clls/wloc
+```
+
+它会修改 AppleWLoc protobuf 响应中的位置字段：
+
+- Wi-Fi 结果：`wifi_devices`，protobuf field `2`
+- 蜂窝基站结果：`cell_tower_response`，protobuf field `22`
+- 经纬度编码：`coord * 1e8`
+- 同步修改水平精度、垂直精度、海拔、运动类型和置信度
+- 移除 `num_cell_results`、`num_wifi_results`、`device_type`，与原项目行为保持一致
+
+模块不 hook CoreLocation，也不修改真实 GNSS/GPS 硬件数据。它只影响能够被
+Shadowrocket HTTPS 解密并经过 Apple `/clls/wloc` 服务的定位流程。
+
+## 文件说明
+
+- `ios-location-spoofer.sgmodule`：默认 Shadowrocket 模块。
+- `location-spoofer.js`：Shadowrocket 脚本，包含 ARPC/protobuf patch 逻辑。
+- `location-spoofer-config.json`：默认配置示例。
+- `ios-location-spoofer-response-probe.sgmodule`：响应体诊断模块。
+- `ios-location-spoofer-request-only.sgmodule`：请求合成诊断模块。
+- `test-location-spoofer.js`：本地 Node.js 测试。
+- `NOTICE.md`：派生说明、原项目引用和授权说明。
+- `LICENSE`：AGPL-3.0 许可证。
+
+## 配置
+
+默认配置如下：
 
 ```json
 {
@@ -55,64 +92,82 @@ The default coordinate is Apple Park in Cupertino, California.
 }
 ```
 
-The published module uses `mode: "response"` because current Shadowrocket logs
-show that the `http-request` hook can run before the binary POST body is exposed.
-Request synthesis remains available in
-`ios-location-spoofer-request-only.sgmodule` for diagnostics. If that module logs
-`Location spoofer request mode body length: 0`, your Shadowrocket build is not
-exposing the `/clls/wloc` request body to scripts.
+发布的主模块把 Apple Park 坐标以内联参数传给脚本。`location-spoofer-config.json`
+保留为可编辑示例，适合想自己托管远程配置的用户。
 
-The response modules use `binary-body-mode=1` because `/clls/wloc` is a binary
-protobuf response. If the response-only module still logs `Location spoofer
-response body too short: 0 bytes` while the probe reports a non-zero
-`content-length`, Shadowrocket is not exposing that binary Apple response body to
-scripts on that build. In that case a pure Shadowrocket module cannot complete
-the original MITM technique on that build; use the original PacketTunnel/local
-proxy approach instead.
+## 诊断模块
 
-The response probe module logs which `$response` fields Shadowrocket exposes
-(`body`, `bodyBytes`, `rawBody`, and `binaryBody`) so this can be confirmed from
-PacketTunnel logs without changing traffic.
+响应 probe：
 
-## What It Spoofs
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-response-probe.sgmodule?v=20260619-cell-probe1
+```
 
-The module targets:
+请求合成诊断：
 
-- `gs-loc.apple.com`
-- `gs-loc-cn.apple.com`
-- `/clls/wloc`
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-request-only.sgmodule?v=20260619-cell-request1
+```
 
-It patches Wi-Fi location results in the AppleWLoc protobuf:
+正常工作时，Shadowrocket 日志里应出现类似：
 
-- latitude and longitude are encoded as `coord * 1e8`
-- horizontal accuracy, vertical accuracy, altitude, motion type, and motion
-  confidence mirror the upstream Go implementation defaults
-- cellular tower response locations are patched too, for cases where iOS sends
-  `/clls/wloc` over LTE and Apple returns `cell_tower_response` entries instead
-  of Wi-Fi entries
-- root fields `num_cell_results`, `num_wifi_results`, and `device_type` are
-  removed, matching the original implementation
+```text
+Location spoofer response body: ... bytes
+Location spoofer patched 2 wifi devices, 0 cell towers, kind=synthetic
+```
 
-It does not hook CoreLocation directly and does not spoof raw GNSS hardware data.
-It only affects location flows that use Apple's Wi-Fi location service and can be
-MITM-decrypted by Shadowrocket.
+如果在 LTE/蜂窝网络下测试，也可能出现：
 
-## Test
+```text
+Location spoofer patched 0 wifi devices, 100+ cell towers, kind=synthetic
+```
 
-Run:
+这也是正常的，说明蜂窝基站结果已经被 patch。
+
+## 常见问题
+
+如果日志显示：
+
+```text
+Location spoofer response body too short: 0 bytes
+```
+
+说明 Shadowrocket 当前没有把二进制响应体暴露给脚本。请确认模块行里存在：
+
+```text
+requires-body=1,binary-body-mode=1,max-size=1048576
+```
+
+如果日志显示：
+
+```text
+Location spoofer patched 0 wifi devices, 0 cell towers
+```
+
+说明这次 Apple 响应里没有可用的 Wi-Fi 或蜂窝定位结果。重新打开定位服务后再测，
+必要时导出 PacketTunnel 日志排查。
+
+HTTP/2 本身不是问题。当前模块已经在 HTTP/1.1 和 HTTP/2 日志中验证过脚本匹配和
+二进制响应体读取。
+
+## 本地测试
 
 ```sh
 node test-location-spoofer.js
 ```
 
-Expected output:
+预期输出：
 
 ```text
 All location spoofer tests passed.
 ```
 
-## License Notice
+## 来源与授权
 
-This is a derivative port of `acheong08/ios-location-spoofer`, which is licensed
-under AGPL-3.0. Keep the original attribution and AGPL-3.0 obligations when
-redistributing this port.
+这是 [acheong08/ios-location-spoofer](https://github.com/acheong08/ios-location-spoofer)
+的派生移植项目。原始逆向研究、Go MITM 实现和 protobuf 结构来自原项目。
+
+本仓库遵循原项目的 AGPL-3.0 授权。重新分发或修改本项目时，请保留原作者署名、
+本仓库修改说明、`NOTICE.md` 和 `LICENSE`。
+
+本项目与 Apple、Shadowrocket 或原项目作者没有官方关联。
