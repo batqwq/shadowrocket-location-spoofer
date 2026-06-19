@@ -5,10 +5,10 @@
 
 [Script]
 # Default mode is request: synthesize the Apple location response from the intercepted ARPC request.
-iOS Location Spoofer Request = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,max-size=0,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=configUrl=https%3A%2F%2Fraw.githubusercontent.com%2Fbatqwq%2Fshadowrocket-location-spoofer%2Fmain%2Flocation-spoofer-config.json
+iOS Location Spoofer Request = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,max-size=0,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=request&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
 
-# Fallback mode. Set "mode": "response" in location-spoofer-config.json if the request synthetic-response path is not supported by your Shadowrocket build.
-iOS Location Spoofer Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,max-size=0,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=configUrl=https%3A%2F%2Fraw.githubusercontent.com%2Fbatqwq%2Fshadowrocket-location-spoofer%2Fmain%2Flocation-spoofer-config.json
+# Fallback mode: if the request script passes through, rewrite Apple's binary response.
+iOS Location Spoofer Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,max-size=0,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=response&latitude=37.3349&longitude=-122.00902&horizontalAccuracy=39&verticalAccuracy=1000&altitude=530&debug=true
 
 [MITM]
 hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com

@@ -102,7 +102,25 @@
     if (typeof body === "object" && typeof body.length === "number") {
       return new Uint8Array(body);
     }
+    if (typeof body === "object" && body.bytes && typeof body.bytes.length === "number") {
+      return new Uint8Array(body.bytes);
+    }
+    if (typeof body === "object" && body.data && typeof body.data.length === "number") {
+      return new Uint8Array(body.data);
+    }
     return null;
+  }
+
+  function messageBodyToBytes(message) {
+    if (!message) {
+      return null;
+    }
+    return (
+      bodyToBytes(message.bodyBytes) ||
+      bodyToBytes(message.body) ||
+      bodyToBytes(message.rawBody) ||
+      bodyToBytes(message.binaryBody)
+    );
   }
 
   function readUInt16BE(bytes, offset) {
@@ -585,11 +603,9 @@
       headers["X-Location-Spoofer-Wifi-Count"] = String(info.wifiCount);
     }
     $done({
-      response: {
-        status: "HTTP/1.1 200 OK",
-        headers: headers,
-        body: bytesToBinaryString(bytes)
-      }
+      status: "HTTP/1.1 200 OK",
+      headers: headers,
+      body: bytesToBinaryString(bytes)
     });
   }
 
@@ -624,8 +640,11 @@
             donePassThrough();
             return;
           }
-          var responseBody = bodyToBytes($response.body);
+          var responseBody = messageBodyToBytes($response);
           if (!responseBody) {
+            if (config.debug) {
+              console.log("Location spoofer response body unavailable");
+            }
             donePassThrough();
             return;
           }
@@ -641,8 +660,11 @@
           donePassThrough();
           return;
         }
-        var requestBody = bodyToBytes($request.body);
+        var requestBody = messageBodyToBytes($request);
         if (!requestBody) {
+          if (config.debug) {
+            console.log("Location spoofer request body unavailable");
+          }
           donePassThrough();
           return;
         }
@@ -674,6 +696,7 @@
     DEFAULT_CONFIG: DEFAULT_CONFIG,
     APPLE_WLOC_PREFIX: APPLE_WLOC_PREFIX,
     bodyToBytes: bodyToBytes,
+    messageBodyToBytes: messageBodyToBytes,
     bytesToBinaryString: bytesToBinaryString,
     binaryStringToBytes: binaryStringToBytes,
     concatBytes: concatBytes,

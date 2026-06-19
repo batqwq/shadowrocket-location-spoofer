@@ -25,10 +25,9 @@ the ARPC/protobuf patching logic in JavaScript.
 5. Enable the module, start Shadowrocket, then toggle iOS Location Services off
    and on before testing Maps.
 
-Shadowrocket cannot generally read the adjacent local JSON file after module
-import, so the config URL must be reachable from the device. If you do not want
-an external config file, pass inline JSON through the script `argument=config=...`
-or edit `DEFAULT_CONFIG` in `location-spoofer.js`.
+The published module passes the Apple Park coordinate inline through the script
+argument. `location-spoofer-config.json` is kept as an editable reference and for
+users who want to host a remote config URL themselves.
 
 ## Config
 
@@ -54,9 +53,9 @@ The default coordinate is Apple Park in Cupertino, California.
 `mode: "request"` is the default. The script reads the intercepted ARPC request
 and returns a synthetic Apple WLoc response.
 
-If your Shadowrocket build does not support synthetic binary responses from an
-`http-request` script, set `mode` to `"response"`. In that mode, the request is
-sent upstream and the script rewrites Apple's binary response body instead.
+The published module enables both paths: the request script tries to synthesize
+the location response first, and the response script rewrites Apple's binary
+response if the request path passes through.
 
 ## What It Spoofs
 
