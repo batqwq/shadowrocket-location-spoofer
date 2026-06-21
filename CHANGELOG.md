@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-06-22
+
+- Added cellular response patching for Apple WLoc root protobuf field `24`.
+- Replayed a real raw-dump response with `121` field-24 cellular results and
+  confirmed the first patched cell location is Apple Park.
+- Updated the public module link to `v=20260622-field24`.
+
 ## 2026-06-20
 
 - Confirmed successful Shadowrocket response patching under HTTP/2 MITM.

@@ -25,7 +25,7 @@ timezone: America/Los_Angeles
 Import the main module in Shadowrocket:
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260620-stable1
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260622-field24
 ```
 
 Then:
@@ -72,7 +72,7 @@ The module intercepts Apple's Wi-Fi/cellular location endpoint:
 It patches location fields inside the AppleWLoc protobuf response:
 
 - Wi-Fi results: `wifi_devices`, protobuf field `2`
-- Cellular tower results: `cell_tower_response`, protobuf field `22`
+- Cellular tower results: `cell_tower_response`, protobuf field `22` or `24`
 - Coordinates are encoded as `coord * 1e8`
 - Horizontal accuracy, vertical accuracy, altitude, motion type, and confidence
   are patched as well

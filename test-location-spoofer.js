@@ -270,6 +270,49 @@ function testCellTowerResponseRewritePath() {
   });
 }
 
+function testAlternateCellTowerResponseRewritePath() {
+  const config = {
+    mode: "response",
+    latitude: 37.3349,
+    longitude: -122.00902,
+    horizontalAccuracy: 39,
+    verticalAccuracy: 1000,
+    altitude: 530,
+    unknownValue4: 3,
+    motionActivityType: 63,
+    motionActivityConfidence: 467
+  };
+
+  const payload = spoofer.concatBytes([
+    spoofer.makeLengthDelimitedField(24, makeCellTowerPayload(true)),
+    spoofer.makeLengthDelimitedField(24, makeCellTowerPayload(false))
+  ]);
+
+  const result = spoofer.spoofAppleResponse(spoofer.buildAppleWLocResponse(payload), config);
+  assert.strictEqual(result.wifiCount, 0);
+  assert.strictEqual(result.cellCount, 2);
+
+  const extraction = spoofer.extractAppleWLocPayload(result.response);
+  const rootFields = spoofer.parseFields(extraction.payload);
+  assert.strictEqual(
+    spoofer.patchedPayloadSummary(extraction.payload),
+    "firstCell=37.33490000,-122.00902000",
+    "patched alternate cell summary"
+  );
+
+  const cells = fieldsByNumber(rootFields, 24);
+  assert.strictEqual(cells.length, 2, "alternate cell tower response count");
+  cells.forEach((cellField, index) => {
+    const cellFields = spoofer.parseFields(cellField.valueBytes);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 1)), 460n, `alternate cell ${index} mcc`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 2)), 11n, `alternate cell ${index} mnc`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 3)), 188743680n, `alternate cell ${index} id`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 4)), 41233n, `alternate cell ${index} tac`);
+    assert.strictEqual(varintFieldValue(firstField(cellFields, 6)), 38400n, `alternate cell ${index} uarfcn`);
+    assertPatchedLocation(firstField(cellFields, 5).valueBytes, config, `alternate cell ${index}`);
+  });
+}
+
 function testBinaryRoundTrip() {
   const bytes = new Uint8Array([0, 1, 2, 127, 128, 255]);
   const body = spoofer.bytesToBinaryString(bytes);
@@ -498,6 +541,7 @@ testArpcRequestPath();
 testResponseRewritePath();
 testAlternatePrefixedResponsePath();
 testCellTowerResponseRewritePath();
+testAlternateCellTowerResponseRewritePath();
 testRealResponseExtraction();
 testBarePayloadExtraction();
 testBinaryRoundTrip();

@@ -34,6 +34,7 @@
   // Validated against zadewg/GS-LOC and the acheong08 research.
   var APPLE_WLOC_MARKER = bytesFromArray([0x00, 0x00, 0x00, 0x01, 0x00, 0x00]);
   var ROOT_DROP_FIELDS = { 3: true, 4: true, 33: true };
+  var CELL_RESPONSE_FIELDS = { 22: true, 24: true };
   var LOCATION_REPLACED_FIELDS = {
     1: true,
     2: true,
@@ -382,7 +383,7 @@
         var wifiLocation = firstFieldByNumber(parseFields(wifi.valueBytes), 2);
         parts.push("firstWifi=" + (wifiLocation ? locationSummary(wifiLocation.valueBytes) : "<missing>"));
       }
-      var cell = firstFieldByNumber(rootFields, 22);
+      var cell = firstCellResponseField(rootFields);
       if (cell && cell.wireType === 2) {
         var cellLocation = firstFieldByNumber(parseFields(cell.valueBytes), 5);
         parts.push("firstCell=" + (cellLocation ? locationSummary(cellLocation.valueBytes) : "<missing>"));
@@ -391,6 +392,19 @@
     } catch (err) {
       return "summary failed: " + err.message;
     }
+  }
+
+  function isCellResponseField(fieldNumber) {
+    return CELL_RESPONSE_FIELDS[fieldNumber] === true;
+  }
+
+  function firstCellResponseField(fields) {
+    for (var i = 0; i < fields.length; i += 1) {
+      if (isCellResponseField(fields[i].fieldNumber)) {
+        return fields[i];
+      }
+    }
+    return null;
   }
 
   function coordToInt(value) {
@@ -513,8 +527,8 @@
       if (field.fieldNumber === 2 && field.wireType === 2) {
         parts.push(makeLengthDelimitedField(2, patchWifiDevice(field.valueBytes, config)));
         wifiCount += 1;
-      } else if (field.fieldNumber === 22 && field.wireType === 2) {
-        parts.push(makeLengthDelimitedField(22, patchCellTower(field.valueBytes, config)));
+      } else if (isCellResponseField(field.fieldNumber) && field.wireType === 2) {
+        parts.push(makeLengthDelimitedField(field.fieldNumber, patchCellTower(field.valueBytes, config)));
         cellCount += 1;
       } else if (!ROOT_DROP_FIELDS[field.fieldNumber]) {
         parts.push(field.raw);
@@ -1021,6 +1035,16 @@
     return count;
   }
 
+  function countCellResponseFields(fields) {
+    var count = 0;
+    for (var i = 0; i < fields.length; i += 1) {
+      if (isCellResponseField(fields[i].fieldNumber)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   function appleWLocPayloadInspect(payload) {
     try {
       var fields = parseFields(payload);
@@ -1028,7 +1052,7 @@
         "payloadLen=" + payload.length,
         "fields=" + fieldHistogram(fields),
         "wifi=" + countFields(fields, 2),
-        "cellResp=" + countFields(fields, 22),
+        "cellResp=" + countCellResponseFields(fields),
         "cellReq=" + countFields(fields, 25),
         "hasCounts=" + (countFields(fields, 3) + "/" + countFields(fields, 4)),
         "deviceType=" + countFields(fields, 33),
