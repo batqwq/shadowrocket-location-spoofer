@@ -23,7 +23,7 @@ timezone: America/Los_Angeles
 在 Shadowrocket 中导入主模块：
 
 ```text
-https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule?v=20260622-field24
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer.sgmodule
 ```
 
 然后按下面步骤配置：

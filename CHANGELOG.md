@@ -5,7 +5,8 @@
 - Added cellular response patching for Apple WLoc root protobuf field `24`.
 - Replayed a real raw-dump response with `121` field-24 cellular results and
   confirmed the first patched cell location is Apple Park.
-- Updated the public module link to `v=20260622-field24`.
+- Kept the public module URL stable at `ios-location-spoofer.sgmodule`; the
+  module now points to the latest script without a cache-busting query string.
 
 ## 2026-06-20
 
