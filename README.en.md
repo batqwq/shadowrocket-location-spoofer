@@ -88,6 +88,8 @@ It patches location fields inside the AppleWLoc protobuf response:
   diagnostic module, pass-through only.
 - `ios-location-spoofer-raw-dump.sgmodule`: full raw body base64 diagnostic
   module, pass-through only.
+- `ios-location-spoofer-dev.sgmodule`: development diagnostic module that keeps
+  spoofing active while logging full raw traffic.
 - `ios-location-spoofer-response-probe.sgmodule`: response-body probe module.
 - `ios-location-spoofer-request-only.sgmodule`: request-synthesis diagnostic
   module.
@@ -144,6 +146,17 @@ https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-
 `raw-dump` writes full `/clls/wloc` request and response bodies into logs as
 base64 chunks. It may contain nearby Wi-Fi/BSSID and cellular tower data, so use
 it only temporarily for deep debugging.
+
+Development raw module:
+
+```text
+https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/ios-location-spoofer-dev.sgmodule
+```
+
+`dev` keeps spoofing responses to Apple Park while logging the original request,
+the response body exposed by Shadowrocket, the parse-time original response, and
+the patched response as base64 chunks. It also logs request/response headers. Use
+it only temporarily, and do not enable the main module at the same time.
 
 Response probe:
 

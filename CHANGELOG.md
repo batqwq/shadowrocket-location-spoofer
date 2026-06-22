@@ -2,6 +2,10 @@
 
 ## 2026-06-22
 
+- Added `ios-location-spoofer-dev.sgmodule`, a development module that keeps
+  Apple Park spoofing active while dumping raw request, original response, and
+  patched response bodies.
+- Added optional raw HTTP metadata/header logging through `dumpHeaders=true`.
 - Added cellular response patching for Apple WLoc root protobuf field `24`.
 - Replayed a real raw-dump response with `121` field-24 cellular results and
   confirmed the first patched cell location is Apple Park.

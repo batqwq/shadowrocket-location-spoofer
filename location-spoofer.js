@@ -22,6 +22,8 @@
     failOpen: true,
     debug: false,
     dumpRaw: false,
+    dumpHeaders: false,
+    prepareHeaders: false,
     rawLimit: 0
   };
 
@@ -438,6 +440,8 @@
     cfg.motionActivityType = Math.trunc(Number(cfg.motionActivityType));
     cfg.motionActivityConfidence = Math.trunc(Number(cfg.motionActivityConfidence));
     cfg.dumpRaw = cfg.dumpRaw === true || String(cfg.dumpRaw).toLowerCase() === "true";
+    cfg.dumpHeaders = cfg.dumpHeaders === true || String(cfg.dumpHeaders).toLowerCase() === "true";
+    cfg.prepareHeaders = cfg.prepareHeaders === true || String(cfg.prepareHeaders).toLowerCase() === "true";
     cfg.rawLimit = Math.trunc(Number(cfg.rawLimit || 0));
     if (!Number.isFinite(cfg.rawLimit) || cfg.rawLimit < 0) {
       cfg.rawLimit = 0;
@@ -837,6 +841,8 @@
       "failOpen",
       "debug",
       "dumpRaw",
+      "dumpHeaders",
+      "prepareHeaders",
       "rawLimit"
     ];
 
@@ -1081,6 +1087,29 @@
     console.log("Location spoofer raw " + label + " base64 end");
   }
 
+  function jsonString(value) {
+    try {
+      return JSON.stringify(value || {});
+    } catch (err) {
+      return "<json-failed:" + err.message + ">";
+    }
+  }
+
+  function logHttpDump(label, message, config) {
+    if (!config.dumpHeaders && !config.dumpRaw) {
+      return;
+    }
+    message = message || {};
+    var request = typeof $request !== "undefined" ? $request : {};
+    var method = message.method || request.method || "<none>";
+    var url = message.url || request.url || "<none>";
+    var status = message.status || message.statusCode || "<none>";
+    console.log("Location spoofer raw " + label + " meta: method=" + method + ", url=" + url + ", status=" + status);
+    if (config.dumpHeaders) {
+      console.log("Location spoofer raw " + label + " headers: " + jsonString(message.headers || {}));
+    }
+  }
+
   function inspectResponseBytes(bytes, config) {
     if (!bytes) {
       console.log("Location spoofer inspect response body unavailable");
@@ -1123,9 +1152,15 @@
 
   function doneInspect(config, hasResponse) {
     if (hasResponse) {
+      logHttpDump("response", $response, config);
       inspectResponseBytes(messageBodyToBytes($response), config);
     } else {
+      logHttpDump("request", $request, config);
       inspectRequestBytes(messageBodyToBytes($request), config);
+      if (config.prepareHeaders) {
+        donePreparedRequestPassThrough();
+        return;
+      }
     }
     donePassThrough();
   }
@@ -1207,6 +1242,8 @@
           var respHeaders = ($response && $response.headers) || {};
           var contentEncoding = headerValue(respHeaders, "Content-Encoding");
           var rawRespBody = $response && ($response.body != null ? $response.body : $response.bodyBytes);
+          logHttpDump("response-wire-original", $response, config);
+          logRawDump("response-wire-original", bodyToBytes(rawRespBody), config);
           if (rawRespBody != null && contentEncoding) {
             var decoded = decompressBody(rawRespBody, contentEncoding);
             if (decoded !== rawRespBody) {
@@ -1224,11 +1261,14 @@
           if (config.debug) {
             console.log("Location spoofer response body: " + responseBody.length + " bytes, head=" + hexPreview(responseBody, 32));
           }
+          logHttpDump("response-original", $response, config);
+          logRawDump("response-original", responseBody, config);
           var responseResult = spoofAppleResponse(responseBody, config);
           if (config.debug) {
             console.log("Location spoofer patched " + responseResult.wifiCount + " wifi devices, " + responseResult.cellCount + " cell towers, kind=" + responseResult.kind + ", prefix=" + (responseResult.prefix || "<none>") + ", response=" + responseResult.response.length + " bytes");
             console.log("Location spoofer patched locations: " + patchedPayloadSummary(responseResult.payload));
           }
+          logRawDump("response-patched", responseResult.response, config);
           doneRewriteResponse(responseResult.response, {
             wifiCount: responseResult.wifiCount,
             cellCount: responseResult.cellCount,
@@ -1259,11 +1299,14 @@
           donePassThrough();
           return;
         }
+        logHttpDump("request-original", $request, config);
+        logRawDump("request-original", requestBody, config);
         var requestResult = spoofArpcRequest(requestBody, config);
         if (config.debug) {
           console.log("Location spoofer request synthetic response: patched " + requestResult.wifiCount + " wifi devices, " + requestResult.cellCount + " cell towers, response=" + requestResult.response.length + " bytes");
           console.log("Location spoofer patched locations: " + patchedPayloadSummary(requestResult.payload));
         }
+        logRawDump("request-synthetic-response", requestResult.response, config);
         doneSyntheticResponse(requestResult.response, {
           wifiCount: requestResult.wifiCount,
           cellCount: requestResult.cellCount,
