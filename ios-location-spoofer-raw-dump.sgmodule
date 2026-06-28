@@ -4,8 +4,8 @@
 #!homepage=https://github.com/acheong08/ios-location-spoofer
 
 [Script]
-iOS Location Spoofer Raw Dump Request = type=http-request,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-rawdump1,argument=mode=inspect&debug=true&dumpRaw=true&rawLimit=0
-iOS Location Spoofer Raw Dump Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-rawdump1,argument=mode=inspect&debug=true&dumpRaw=true&rawLimit=0
+iOS Location Spoofer Raw Dump Request = type=http-request,pattern=^https?:\/\/(?:gs-loc(?:-cn)?\.apple\.com|bluedot\.is\.autonavi\.com(?:\.gds\.alibabadns\.com)?)\/clls\/wloc(?:\?.*)?$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-rawdump1,argument=mode=inspect&debug=true&dumpRaw=true&rawLimit=0
+iOS Location Spoofer Raw Dump Response = type=http-response,pattern=^https?:\/\/(?:gs-loc(?:-cn)?\.apple\.com|bluedot\.is\.autonavi\.com(?:\.gds\.alibabadns\.com)?)\/clls\/wloc(?:\?.*)?$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js?v=20260619-rawdump1,argument=mode=inspect&debug=true&dumpRaw=true&rawLimit=0
 
 [MITM]
-hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com
+hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com, bluedot.is.autonavi.com, bluedot.is.autonavi.com.gds.alibabadns.com

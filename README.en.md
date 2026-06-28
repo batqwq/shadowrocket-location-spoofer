@@ -43,6 +43,8 @@ The module automatically appends MITM hostnames:
 ```text
 gs-loc.apple.com
 gs-loc-cn.apple.com
+bluedot.is.autonavi.com
+bluedot.is.autonavi.com.gds.alibabadns.com
 ```
 
 ## Current Status
@@ -51,6 +53,7 @@ Verified in Shadowrocket PacketTunnel logs:
 
 - The module can read and patch `/clls/wloc` binary responses under HTTP/2 MITM.
 - Wi-Fi location responses can be rewritten to Apple Park.
+- China-region Bluedot/Autonavi CDN `/clls/wloc` responses are also covered by MITM.
 - Cellular `cell_tower_response` results can be rewritten to Apple Park.
 - A real cellular test patched `121 cell towers`, with the first cellular result
   set to `37.33490000,-122.00902000`.
@@ -63,7 +66,7 @@ endpoint may not be affected.
 
 ## How It Works
 
-The module intercepts Apple's Wi-Fi/cellular location endpoint:
+The module intercepts Apple's Wi-Fi/cellular location endpoint and the same path served through the China-region Bluedot/Autonavi CDN:
 
 ```text
 /clls/wloc

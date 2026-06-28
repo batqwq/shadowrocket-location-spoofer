@@ -5,7 +5,7 @@
 
 [Script]
 # Taiwan preset: Taipei 101, Taipei.
-iOS Location Spoofer Taiwan Response = type=http-response,pattern=^https?:\/\/gs-loc(?:-cn)?\.apple\.com\/clls\/wloc$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=response&latitude=25.033964&longitude=121.564468&horizontalAccuracy=39&verticalAccuracy=1000&altitude=10&debug=false
+iOS Location Spoofer Taiwan Response = type=http-response,pattern=^https?:\/\/(?:gs-loc(?:-cn)?\.apple\.com|bluedot\.is\.autonavi\.com(?:\.gds\.alibabadns\.com)?)\/clls\/wloc(?:\?.*)?$,requires-body=1,binary-body-mode=1,max-size=1048576,timeout=10,script-path=https://raw.githubusercontent.com/batqwq/shadowrocket-location-spoofer/main/location-spoofer.js,argument=mode=response&latitude=25.033964&longitude=121.564468&horizontalAccuracy=39&verticalAccuracy=1000&altitude=10&debug=false
 
 [MITM]
-hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com
+hostname = %APPEND% gs-loc.apple.com, gs-loc-cn.apple.com, bluedot.is.autonavi.com, bluedot.is.autonavi.com.gds.alibabadns.com

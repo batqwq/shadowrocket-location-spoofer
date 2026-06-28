@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-29
+
+- Added Bluedot/Autonavi CDN coverage for China-region Apple WLoc requests:
+  `bluedot.is.autonavi.com` and
+  `bluedot.is.autonavi.com.gds.alibabadns.com`.
+- Updated all Shadowrocket modules to match the Apple GS-LOC and Bluedot
+  `/clls/wloc` endpoints, including optional query strings.
+- Kept the JavaScript patcher unchanged; response-mode parsing already handles
+  ARPC, prefixed, marker, and bare AppleWLoc payload shapes.
+
 ## 2026-06-22
 
 - Added `ios-location-spoofer-dev.sgmodule`, a development module that keeps
